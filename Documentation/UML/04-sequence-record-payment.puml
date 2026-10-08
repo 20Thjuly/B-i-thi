@@ -1,0 +1,85 @@
+@startuml SequenceRecordPayment
+title BIỂU ĐỒ TRÌNH TỰ (SEQUENCE DIAGRAM): THU TIỀN & PHÂN BỔ CÔNG NỢ TỰ ĐỘNG (FIFO ALLOCATION)
+autonumber
+skinparam shadowing false
+skinparam roundcorner 5
+
+actor "Kế toán Công nợ\n(Accountant / Admin)" as Actor
+boundary "UI: CreatePayment.razor\n(Blazor Component)" as UI
+control "UseCase:\nRecordPaymentUseCase" as UC
+control "Business Rule:\nAllocatePaymentUseCase" as FIFO
+participant "Repo:\nInvoiceRepository" as InvRepo
+participant "Repo:\nPaymentRepository" as PmtRepo
+database "SQL Server\n(SalesARDB)" as DB
+
+Actor -> UI : Chọn Khách hàng & Nhập Số tiền thu (Payment.Amount)
+activate UI
+
+UI -> InvRepo : GetOutstandingInvoicesByCustomerAsync(customerId)
+activate InvRepo
+InvRepo -> DB : SELECT Invoices WHERE CustomerId = @Id AND Status <> 'Paid'
+activate DB
+DB --> InvRepo : Trả về danh sách hóa đơn còn nợ
+deactivate DB
+InvRepo --> UI : outstandingInvoices (List)
+deactivate InvRepo
+
+UI -> FIFO : Execute(0, paymentAmount, outstandingInvoices)
+activate FIFO
+FIFO -> FIFO : Sắp xếp InvoiceDate ASC, Id ASC\n(Hóa đơn cũ nhất lên trước)
+FIFO -> FIFO : Duyệt và cấn trừ số dư nợ theo thứ tự
+FIFO --> UI : Trả về preview các dòng cấn trừ FIFO
+deactivate FIFO
+
+UI --> Actor : Hiển thị bảng Xem trước (Preview) phân bổ nợ các hóa đơn
+
+Actor -> UI : Bấm nút "Xác Nhận Thu Tiền & Phân Bổ"
+
+UI -> UC : ExecuteAsync(payment)
+activate UC
+
+' BƯỚC 1: Lấy hóa đơn còn nợ thực tế
+UC -> InvRepo : GetOutstandingInvoicesByCustomerAsync(payment.CustomerId)
+activate InvRepo
+InvRepo -> DB : Query hóa đơn chưa thanh toán
+activate DB
+DB --> InvRepo : Trả về hóa đơn
+deactivate DB
+InvRepo --> UC : unpaidInvoices (List)
+deactivate InvRepo
+
+' BƯỚC 2: Chạy thuật toán phân bổ FIFO chính thức (BUSINESS RULE 2 - K1.3)
+UC -> FIFO : Execute(0, payment.Amount, unpaidInvoices)
+activate FIFO
+FIFO -> FIFO : Phân bổ FIFO: Math.Min(remainingPayment, inv.RemainingAmount)
+FIFO --> UC : allocations (List<PaymentAllocation>)
+deactivate FIFO
+
+' BƯỚC 3: Mở Transaction và Lưu dữ liệu (K2.2)
+UC -> PmtRepo : CreatePaymentWithAllocationsAsync(payment, allocations)
+activate PmtRepo
+
+PmtRepo -> DB : BEGIN TRANSACTION
+activate DB
+
+PmtRepo -> DB : INSERT INTO Payments (PaymentNumber, CustomerId, PaymentDate, Amount, Note)\nOUTPUT INSERTED.Id
+DB --> PmtRepo : Trả về paymentId
+
+loop Cho từng allocation trong danh sách
+    PmtRepo -> DB : INSERT INTO PaymentAllocations (PaymentId, InvoiceId, AllocatedAmount)
+    
+    PmtRepo -> DB : UPDATE Invoices\nSET Status = CASE\n  WHEN TotalAllocated >= TotalAmount THEN 'Paid'\n  WHEN TotalAllocated > 0 THEN 'PartiallyPaid'\n  ELSE 'Unpaid' END\nWHERE Id = @InvoiceId
+end
+
+PmtRepo -> DB : COMMIT TRANSACTION
+deactivate DB
+PmtRepo --> UC : Trả về paymentId thành công
+deactivate PmtRepo
+
+UC --> UI : Hoàn thành ghi nhận phiếu thu
+deactivate UC
+
+UI --> Actor : Thông báo thành công & Hiển thị kết quả chi tiết từng hóa đơn đã cấn trừ
+deactivate UI
+
+@enduml

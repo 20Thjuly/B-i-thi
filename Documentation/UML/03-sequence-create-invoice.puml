@@ -1,0 +1,85 @@
+@startuml SequenceCreateInvoice
+title BIỂU ĐỒ TRÌNH TỰ (SEQUENCE DIAGRAM): TẠO HÓA ĐƠN BÁN HÀNG & KIỂM TRA HẠN MỨC TÍN DỤNG (CREDIT LIMIT)
+autonumber
+skinparam shadowing false
+skinparam roundcorner 5
+
+actor "Nhân viên Bán hàng\n(Sales / Admin)" as Actor
+boundary "UI: CreateInvoice.razor\n(Blazor Component)" as UI
+control "UseCase:\nCreateInvoiceUseCase" as UC
+participant "Repo:\nCustomerRepository" as CustRepo
+participant "Repo:\nInvoiceRepository" as InvRepo
+database "SQL Server\n(SalesARDB)" as DB
+
+Actor -> UI : Nhập thông tin Khách hàng, Sản phẩm, Số lượng & Bấm "Lưu Hóa Đơn"
+activate UI
+
+UI -> UI : Validate DataAnnotations\n(CustomerId > 0, Lines.Count > 0, Qty > 0)
+
+UI -> UC : ExecuteAsync(invoice, lines)
+activate UC
+
+' BƯỚC 1: Validate Customer
+UC -> CustRepo : GetByIdAsync(invoice.CustomerId)
+activate CustRepo
+CustRepo -> DB : SELECT * FROM Customers WHERE Id = @Id
+activate DB
+DB --> CustRepo : Trả về Customer data
+deactivate DB
+CustRepo --> UC : Customer (CreditLimit, IsActive)
+deactivate CustRepo
+
+alt Khách hàng không tồn tại hoặc bị khóa
+    UC --> UI : Throw InvalidOperationException("Khách hàng không hợp lệ")
+    UI --> Actor : Hiển thị Alert lỗi màu đỏ
+else Khách hàng hợp lệ
+    ' BƯỚC 2: Kiểm tra hạn mức tín dụng (BUSINESS RULE 1 - K1.3)
+    UC -> CustRepo : GetCurrentDebtAsync(invoice.CustomerId)
+    activate CustRepo
+    CustRepo -> DB : SELECT SUM(RemainingDebt) FROM Invoices WHERE CustomerId = @Id
+    activate DB
+    DB --> CustRepo : Trả về currentDebt
+    deactivate DB
+    CustRepo --> UC : currentDebt (decimal)
+    deactivate CustRepo
+
+    alt currentDebt + invoice.TotalAmount > customer.CreditLimit (VƯỢT HẠN MỨC)
+        UC --> UI : Throw InvalidOperationException("Vượt quá hạn mức tín dụng cho phép!")
+        UI --> Actor : Hiển thị Business Error: "Công nợ hiện tại + Hóa đơn vượt Hạn mức!"
+    else Đủ điều kiện cấp tín dụng (HỢP LỆ)
+        ' BƯỚC 3: Mở Transaction và Lưu dữ liệu (K2.2)
+        UC -> InvRepo : CreateInvoiceWithLinesAsync(invoice, lines)
+        activate InvRepo
+
+        InvRepo -> DB : BEGIN TRANSACTION
+        activate DB
+
+        InvRepo -> DB : INSERT INTO Invoices ... OUTPUT INSERTED.Id
+        DB --> InvRepo : Trả về invoiceId
+
+        loop Cho từng sản phẩm trong lines
+            InvRepo -> DB : INSERT INTO InvoiceLines (InvoiceId, ProductId, Quantity, UnitPrice, Amount)
+            InvRepo -> DB : UPDATE Products SET StockQuantity = StockQuantity - @Qty WHERE Id = @ProductId
+            
+            alt Không đủ tồn kho
+                InvRepo -> DB : ROLLBACK TRANSACTION
+                InvRepo --> UC : Throw Exception("Hết hàng trong kho")
+                UC --> UI : Hiển thị lỗi tồn kho
+            end
+        end
+
+        InvRepo -> DB : COMMIT TRANSACTION
+        deactivate DB
+        InvRepo --> UC : Trả về invoiceId thành công
+        deactivate InvRepo
+
+        UC --> UI : Trả về invoiceId
+        deactivate UC
+
+        UI --> Actor : Toast thông báo "Tạo hóa đơn thành công!" & Chuyển hướng /invoices
+    end
+end
+
+deactivate UI
+
+@enduml

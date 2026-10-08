@@ -1,0 +1,267 @@
+@startuml ClassDiagram
+title SƠ ĐỒ LỚP CHI TIẾT (CLASS DIAGRAM) - SALES & ACCOUNTS RECEIVABLE
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+
+' ==========================================================
+' TẦNG 1: CORE BUSINESS ENTITIES
+' ==========================================================
+package "SalesAR.CoreBusiness.Models" {
+    class Customer {
+        +int Id
+        +string Code
+        +string Name
+        +string Phone
+        +string Address
+        +decimal CreditLimit
+        +int PaymentTermDays
+        +bool IsActive
+    }
+
+    class Product {
+        +int Id
+        +string Code
+        +string Name
+        +string Unit
+        +decimal Price
+        +int StockQuantity
+        +bool IsActive
+    }
+
+    class Invoice {
+        +int Id
+        +string InvoiceNumber
+        +int CustomerId
+        +DateTime InvoiceDate
+        +DateTime DueDate
+        +decimal TotalAmount
+        +string Status
+    }
+
+    class InvoiceLine {
+        +int Id
+        +int InvoiceId
+        +int ProductId
+        +int Quantity
+        +decimal UnitPrice
+        +decimal Amount
+    }
+
+    class Payment {
+        +int Id
+        +string PaymentNumber
+        +int CustomerId
+        +DateTime PaymentDate
+        +decimal Amount
+        +string Note
+    }
+
+    class PaymentAllocation {
+        +int Id
+        +int PaymentId
+        +int InvoiceId
+        +decimal AllocatedAmount
+    }
+
+    class User {
+        +int Id
+        +string Username
+        +string PasswordHash
+        +string Salt
+        +string FullName
+        +bool IsActive
+    }
+
+    class Role {
+        +int Id
+        +string Name
+        +string Description
+    }
+
+    Invoice "1" *-- "many" InvoiceLine : chứa
+    Customer "1" --> "many" Invoice : phát sinh
+    Customer "1" --> "many" Payment : thanh toán
+    Payment "1" *-- "many" PaymentAllocation : phân bổ
+    Invoice "1" <-- "many" PaymentAllocation : cấn trừ
+    User "many" o-- "many" Role : sở hữu
+}
+
+' ==========================================================
+' TẦNG 2: REPOSITORY INTERFACES & USE CASES (APPLICATION)
+' ==========================================================
+package "SalesAR.UseCases.PluginInterfaces" {
+    interface ICustomerRepository {
+        +GetAllAsync() : Task<IEnumerable<Customer>>
+        +GetByIdAsync(id: int) : Task<Customer?>
+        +AddAsync(customer: Customer) : Task<int>
+        +UpdateAsync(customer: Customer) : Task
+        +DeleteAsync(id: int) : Task
+        +GetCurrentDebtAsync(customerId: int) : Task<decimal>
+        +GetCustomerDebtDetailsAsync(customerId: int) : Task<CustomerDebtDto?>
+    }
+
+    interface IProductRepository {
+        +GetAllAsync() : Task<IEnumerable<Product>>
+        +GetByIdAsync(id: int) : Task<Product?>
+        +AddAsync(product: Product) : Task<int>
+        +UpdateAsync(product: Product) : Task
+        +DeleteAsync(id: int) : Task
+    }
+
+    interface IInvoiceRepository {
+        +GetByIdAsync(id: int) : Task<Invoice?>
+        +GetInvoicesByCustomerAsync(customerId: int) : Task<IEnumerable<Invoice>>
+        +GetOutstandingInvoicesByCustomerAsync(customerId: int) : Task<IEnumerable<InvoiceOutstandingDto>>
+        +CreateInvoiceWithLinesAsync(invoice: Invoice, lines: IEnumerable<InvoiceLine>) : Task<int>
+    }
+
+    interface IPaymentRepository {
+        +GetAllAsync() : Task<IEnumerable<Payment>>
+        +GetAllocationsByPaymentIdAsync(paymentId: int) : Task<IEnumerable<PaymentAllocation>>
+        +CreatePaymentWithAllocationsAsync(payment: Payment, allocations: IEnumerable<PaymentAllocation>) : Task<int>
+    }
+
+    interface IAgingReportRepository {
+        +GetAgingReportAsync(asOfDate: DateTime) : Task<AgingReportSummary>
+    }
+
+    interface IUserRepository {
+        +GetByUsernameAsync(username: string) : Task<User?>
+        +AddAsync(user: User, roleIds: List<int>) : Task<int>
+    }
+
+    interface IRoleRepository {
+        +GetAllAsync() : Task<IEnumerable<Role>>
+    }
+}
+
+package "SalesAR.UseCases" {
+    class CreateInvoiceUseCase {
+        -ICustomerRepository _customerRepository
+        -IInvoiceRepository _invoiceRepository
+        +ExecuteAsync(invoice: Invoice, lines: List<InvoiceLine>) : Task<int>
+    }
+
+    class AllocatePaymentUseCase {
+        +Execute(paymentId: int, amount: decimal, unpaidInvoices: IEnumerable<InvoiceOutstandingDto>) : List<PaymentAllocation>
+    }
+
+    class RecordPaymentUseCase {
+        -IPaymentRepository _paymentRepository
+        -IInvoiceRepository _invoiceRepository
+        -ICustomerRepository _customerRepository
+        -IAllocatePaymentUseCase _allocatePaymentUseCase
+        +ExecuteAsync(payment: Payment) : Task<int>
+    }
+
+    class GetAgingReportUseCase {
+        -IAgingReportRepository _agingReportRepository
+        +ExecuteAsync(asOfDate: DateTime) : Task<AgingReportSummary>
+    }
+
+    class GetCustomerDebtUseCase {
+        -ICustomerRepository _customerRepository
+        +ExecuteAsync(customerId: int) : Task<decimal>
+    }
+}
+
+CreateInvoiceUseCase --> ICustomerRepository
+CreateInvoiceUseCase --> IInvoiceRepository
+RecordPaymentUseCase --> IPaymentRepository
+RecordPaymentUseCase --> IInvoiceRepository
+RecordPaymentUseCase --> ICustomerRepository
+RecordPaymentUseCase --> AllocatePaymentUseCase
+GetAgingReportUseCase --> IAgingReportRepository
+GetCustomerDebtUseCase --> ICustomerRepository
+
+' ==========================================================
+' TẦNG 3: PLUGINS (INFRASTRUCTURE / DATA ACCESS)
+' ==========================================================
+package "SalesAR.Plugins" {
+    interface ISqlConnectionFactory {
+        +CreateConnection() : IDbConnection
+    }
+
+    class SqlConnectionFactory {
+        -string _connectionString
+        +CreateConnection() : IDbConnection
+    }
+
+    class CustomerRepository {
+        -ISqlConnectionFactory _connectionFactory
+    }
+
+    class ProductRepository {
+        -ISqlConnectionFactory _connectionFactory
+    }
+
+    class InvoiceRepository {
+        -ISqlConnectionFactory _connectionFactory
+    }
+
+    class PaymentRepository {
+        -ISqlConnectionFactory _connectionFactory
+    }
+
+    class AgingReportRepository {
+        -ISqlConnectionFactory _connectionFactory
+    }
+
+    class UserRepository {
+        -ISqlConnectionFactory _connectionFactory
+    }
+
+    class RoleRepository {
+        -ISqlConnectionFactory _connectionFactory
+    }
+}
+
+ISqlConnectionFactory <|.. SqlConnectionFactory
+ICustomerRepository <|.. CustomerRepository
+IProductRepository <|.. ProductRepository
+IInvoiceRepository <|.. InvoiceRepository
+IPaymentRepository <|.. PaymentRepository
+IAgingReportRepository <|.. AgingReportRepository
+IUserRepository <|.. UserRepository
+IRoleRepository <|.. RoleRepository
+
+CustomerRepository --> ISqlConnectionFactory
+ProductRepository --> ISqlConnectionFactory
+InvoiceRepository --> ISqlConnectionFactory
+PaymentRepository --> ISqlConnectionFactory
+AgingReportRepository --> ISqlConnectionFactory
+UserRepository --> ISqlConnectionFactory
+RoleRepository --> ISqlConnectionFactory
+
+' ==========================================================
+' TẦNG 4: PRESENTATION & SERVICES (WEB / UI)
+' ==========================================================
+package "SalesAR.Web.Services" {
+    interface IAgingReportExporter {
+        +ExportToExcel(summary: AgingReportSummary, asOfDate: DateTime) : byte[]
+        +ExportToPdf(summary: AgingReportSummary, asOfDate: DateTime) : byte[]
+    }
+
+    class AgingReportExporter {
+        +ExportToExcel(summary: AgingReportSummary, asOfDate: DateTime) : byte[]
+        +ExportToPdf(summary: AgingReportSummary, asOfDate: DateTime) : byte[]
+    }
+
+    class PasswordHasher {
+        +HashPassword(password: string, out salt: string) : string
+        +VerifyPassword(password: string, hash: string, salt: string) : bool
+    }
+
+    class CustomAuthenticationStateProvider {
+        -IUserRepository _userRepository
+        -IPasswordHasher _passwordHasher
+        +LoginAsync(username, password) : Task<bool>
+        +LogoutAsync() : Task
+    }
+}
+
+IAgingReportExporter <|.. AgingReportExporter
+
+@enduml

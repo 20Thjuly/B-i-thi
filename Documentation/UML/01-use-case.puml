@@ -1,0 +1,76 @@
+@startuml UseCaseDiagram
+title SƠ ĐỒ USE CASE TỔNG QUAN - SALES & ACCOUNTS RECEIVABLE (SALES & AR)
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam actorStyle awesome
+
+actor "Admin (Quản trị viên)" as Admin
+actor "Sales (Nhân viên Kinh doanh)" as Sales
+actor "Accountant (Kế toán Công nợ)" as Accountant
+
+rectangle "Hệ thống Bán hàng & Quản lý Công nợ (Sales & AR)" {
+    ' Nhóm Xác thực
+    package "Xác thực & Bảo mật" {
+        usecase "UC01: Đăng nhập (Login)" as UC_Login
+        usecase "UC02: Đăng xuất (Logout)" as UC_Logout
+    }
+
+    ' Nhóm Quản trị hệ thống (Admin Only)
+    package "Quản trị Hệ thống (Admin Only)" {
+        usecase "UC12: Quản lý Người dùng (Manage Users)" as UC_ManageUsers
+        usecase "UC13: Quản lý Phân quyền (Manage Roles)" as UC_ManageRoles
+    }
+
+    ' Nhóm Bán hàng & Khách hàng (Sales & Admin)
+    package "Bán hàng & Khách hàng" {
+        usecase "UC03: Quản lý Khách hàng (Manage Customer)" as UC_ManageCustomer
+        usecase "UC04: Quản lý Sản phẩm (Manage Product)" as UC_ManageProduct
+        usecase "UC05: Lập Hóa đơn Bán hàng (Create Invoice)" as UC_CreateInvoice
+        usecase "UC06: Tra cứu Công nợ Khách hàng (View Customer Debt)" as UC_ViewCustomerDebt
+    }
+
+    ' Nhóm Kế toán & Công nợ (Accountant & Admin)
+    package "Kế toán & Công nợ" {
+        usecase "UC07: Ghi nhận Thu tiền (Record Payment)" as UC_RecordPayment
+        usecase "UC08: Phân bổ Thanh toán FIFO (Allocate Payment)" as UC_AllocatePayment
+        usecase "UC09: Xem Báo cáo Tuổi nợ (View Aging Report)" as UC_ViewAgingReport
+        usecase "UC10: Xuất Báo cáo Excel (Export Excel)" as UC_ExportExcel
+        usecase "UC11: Xuất Báo cáo PDF (Export PDF)" as UC_ExportPdf
+    }
+}
+
+' Quan hệ thừa kế quyền hạn (Admin có toàn quyền của Sales và Accountant)
+Admin --|> Sales
+Admin --|> Accountant
+
+' Quyền chung
+Sales --> UC_Login
+Sales --> UC_Logout
+Accountant --> UC_Login
+Accountant --> UC_Logout
+
+' Quyền của Sales
+Sales --> UC_ManageCustomer
+Sales --> UC_ManageProduct
+Sales --> UC_CreateInvoice
+Sales --> UC_ViewCustomerDebt
+
+' Quyền của Accountant
+Accountant --> UC_ViewCustomerDebt
+Accountant --> UC_RecordPayment
+Accountant --> UC_ViewAgingReport
+Accountant --> UC_ExportExcel
+Accountant --> UC_ExportPdf
+
+' Quyền riêng của Admin
+Admin --> UC_ManageUsers
+Admin --> UC_ManageRoles
+
+' Quan hệ Include / Extend trong Use Case
+UC_RecordPayment ..> UC_AllocatePayment : <<include>>\n(Tự động theo FIFO)
+UC_CreateInvoice ..> UC_ViewCustomerDebt : <<include>>\n(Kiểm tra Credit Limit)
+UC_ViewAgingReport <.. UC_ExportExcel : <<extend>>
+UC_ViewAgingReport <.. UC_ExportPdf : <<extend>>
+
+@enduml
