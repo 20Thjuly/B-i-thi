@@ -14,6 +14,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <PackageReference Include="QuestPDF" Version="2026.9.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SalesAR.CoreBusiness\SalesAR.CoreBusiness.csproj" />
     <ProjectReference Include="..\SalesAR.UseCases\SalesAR.UseCases.csproj" />
+    <ProjectReference Include="..\SalesAR.Web\SalesAR.Web.csproj" />
   </ItemGroup>
 
 </Project>

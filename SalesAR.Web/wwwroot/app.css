@@ -1,7 +1,19 @@
+:root {
+    --bs-body-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 html, body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: #212529;
     background-color: #f8fafc;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* Kế thừa font chữ cho toàn bộ input, select, button để không bị lỗi chân chữ / font tiếng Việt */
+input, button, select, optgroup, textarea, .form-control, .form-select, .btn {
+    font-family: inherit;
 }
 
 a, .btn-link {

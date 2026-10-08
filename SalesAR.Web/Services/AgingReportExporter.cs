@@ -169,7 +169,7 @@ public class AgingReportExporter : IAgingReportExporter
                 page.Size(PageSizes.A4.Landscape());
                 page.Margin(1.2f, Unit.Centimetre);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(x => x.FontSize(8.5f));
+                page.DefaultTextStyle(x => x.FontFamily("Segoe UI").FontSize(8.5f));
 
                 // Header
                 page.Header().Column(col =>
