@@ -1,0 +1,121 @@
+@page "/"
+@inject IViewCustomersUseCase ViewCustomersUseCase
+@inject IAgingReportRepository AgingReportRepository
+
+<PageTitle>Bán hàng & Công nợ Khách hàng - Đợt 1</PageTitle>
+
+<div class="container py-4">
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4 bg-light rounded-3">
+            <h1 class="h3 fw-bold text-primary mb-2">Đồ án: 18. Bán hàng & Công nợ Khách hàng – Sales & Accounts Receivable</h1>
+            <p class="text-muted mb-0">
+                Kiểm tra kiến trúc Clean Architecture 4 tầng, Dependency Injection Scoped và Kết nối CSDL SQL Server (Đợt 1).
+            </p>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="d-flex align-items-center text-muted">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <span>Đang kiểm tra kết nối CSDL và Dependency Injection...</span>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <h5 class="alert-heading fw-bold">Lỗi kết nối cơ sở dữ liệu!</h5>
+            <p class="mb-0">@_errorMessage</p>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="card-title mb-0 fw-semibold text-secondary">
+                            <i class="bi bi-people-fill me-2"></i>Dữ liệu Khách hàng (ICustomerRepository via DI)
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-hover table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mã KH</th>
+                                    <th>Tên khách hàng</th>
+                                    <th class="text-end">Hạn mức nợ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _customers)
+                                {
+                                    <tr>
+                                        <td class="fw-bold">@c.Code</td>
+                                        <td>@c.Name</td>
+                                        <td class="text-end">@c.CreditLimit.ToString("N0") đ</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="card-title mb-0 fw-semibold text-secondary">
+                            <i class="bi bi-graph-up me-2"></i>Báo cáo Tuổi nợ (IAgingReportRepository via DI)
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-hover table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mã KH</th>
+                                    <th class="text-end">Tổng nợ</th>
+                                    <th class="text-end">Nợ >90 ngày</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _agingReports)
+                                {
+                                    <tr>
+                                        <td class="fw-bold">@r.CustomerCode</td>
+                                        <td class="text-end text-danger fw-semibold">@r.CurrentDebt.ToString("N0") đ</td>
+                                        <td class="text-end text-danger">@r.BucketOver90.ToString("N0") đ</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _errorMessage;
+    private IEnumerable<Customer> _customers = Enumerable.Empty<Customer>();
+    private IEnumerable<AgingReportItem> _agingReports = Enumerable.Empty<AgingReportItem>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _customers = await ViewCustomersUseCase.ExecuteAsync();
+            _agingReports = await AgingReportRepository.GetAgingReportAsync(DateTime.Now);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
