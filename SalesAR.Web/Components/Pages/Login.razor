@@ -1,0 +1,140 @@
+@page "/login"
+@rendermode InteractiveServer
+@inject ILoginUseCase LoginUseCase
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Đăng nhập - Sales & AR</PageTitle>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-5">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white text-center py-4">
+                    <i class="bi bi-shield-lock fs-1 d-block mb-2"></i>
+                    <h3 class="fw-bold mb-1">Đăng nhập Hệ thống</h3>
+                    <p class="small text-white-50 mb-0">Hệ thống Quản lý Bán hàng & Công nợ Khách hàng</p>
+                </div>
+
+                <div class="card-body p-4 p-md-5">
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div class="alert alert-danger d-flex align-items-center mb-4 py-2" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill fs-5 me-2 text-danger"></i>
+                            <div>@_errorMessage</div>
+                        </div>
+                    }
+
+                    <EditForm Model="@_loginModel" FormName="LoginForm" OnValidSubmit="HandleLogin">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Tên đăng nhập</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-person text-muted"></i></span>
+                                <InputText class="form-control" @bind-Value="_loginModel.Username" placeholder="Nhập tên đăng nhập..." />
+                            </div>
+                            <ValidationMessage For="() => _loginModel.Username" class="text-danger small" />
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Mật khẩu</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-key text-muted"></i></span>
+                                <input type="password" class="form-control" @bind="_loginModel.Password" placeholder="Nhập mật khẩu..." />
+                            </div>
+                            <ValidationMessage For="() => _loginModel.Password" class="text-danger small" />
+                        </div>
+
+                        <div class="d-grid mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg" disabled="@_isSubmitting">
+                                @if (_isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Đang xác thực...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-box-arrow-in-right me-1"></i>
+                                    <span>Đăng nhập</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+
+                    <!-- Phím tắt Demo cho Giảng viên / Ban Giám Khảo kiểm thử -->
+                    <div class="border-top pt-3">
+                        <div class="small fw-semibold text-muted text-uppercase mb-2 text-center">Tài khoản mẫu để kiểm thử Đợt 4:</div>
+                        <div class="d-flex flex-column gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-danger text-start d-flex justify-content-between align-items-center"
+                                    @onclick='() => SetDemoUser("admin", "Admin@123")'>
+                                <span><i class="bi bi-person-gear me-1"></i><strong>ADMIN</strong> (Toàn quyền)</span>
+                                <span class="badge bg-danger">admin / Admin@123</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary text-start d-flex justify-content-between align-items-center"
+                                    @onclick='() => SetDemoUser("sales", "Sales@123")'>
+                                <span><i class="bi bi-cart me-1"></i><strong>SALES</strong> (Bán hàng, Lập HĐ)</span>
+                                <span class="badge bg-primary">sales / Sales@123</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success text-start d-flex justify-content-between align-items-center"
+                                    @onclick='() => SetDemoUser("accountant", "Acc@123")'>
+                                <span><i class="bi bi-calculator me-1"></i><strong>ACCOUNTANT</strong> (Thu tiền, Aging)</span>
+                                <span class="badge bg-success">accountant / Acc@123</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginViewModel _loginModel = new();
+    private bool _isSubmitting = false;
+    private string? _errorMessage;
+
+    private void SetDemoUser(string u, string p)
+    {
+        _loginModel.Username = u;
+        _loginModel.Password = p;
+        _errorMessage = null;
+    }
+
+    private async Task HandleLogin()
+    {
+        _errorMessage = null;
+        _isSubmitting = true;
+
+        try
+        {
+            var user = await LoginUseCase.ExecuteAsync(_loginModel.Username, _loginModel.Password);
+
+            var customAuth = (CustomAuthenticationStateProvider)AuthStateProvider;
+            await customAuth.MarkUserAsAuthenticatedAsync(user);
+
+            Navigation.NavigateTo("dashboard", forceLoad: false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        catch (Exception)
+        {
+            _errorMessage = "Đã xảy ra lỗi không mong muốn trong quá trình đăng nhập. Vui lòng thử lại.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    public class LoginViewModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Tên đăng nhập là bắt buộc.")]
+        public string Username { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Mật khẩu là bắt buộc.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

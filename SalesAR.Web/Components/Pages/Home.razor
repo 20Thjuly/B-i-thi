@@ -1,5 +1,6 @@
 @page "/"
 @page "/dashboard"
+@attribute [Authorize]
 @inject IGetAgingReportUseCase GetAgingReportUseCase
 @inject IViewInvoicesUseCase ViewInvoicesUseCase
 @inject IViewCustomersUseCase ViewCustomersUseCase

@@ -1,4 +1,5 @@
 @page "/payments"
+@attribute [Authorize(Roles = "ADMIN,ACCOUNTANT")]
 @inject IViewPaymentsUseCase ViewPaymentsUseCase
 @inject IViewCustomersUseCase ViewCustomersUseCase
 @inject IPaymentRepository PaymentRepository

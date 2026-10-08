@@ -1,6 +1,9 @@
 @page "/debt"
+@attribute [Authorize]
 @inject IViewCustomersUseCase ViewCustomersUseCase
 @inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
+@inject IInvoiceRepository InvoiceRepository
+@inject SalesAR.UseCases.AI.IDebtReminderAiService DebtReminderAiService
 
 <PageTitle>Theo dõi Công nợ Khách hàng</PageTitle>
 
@@ -13,12 +16,16 @@
             <p class="text-muted small mb-0">Theo dõi chi tiết công nợ, hạn mức tín dụng và số dư khả dụng của từng khách hàng</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="invoices/create" class="btn btn-primary btn-sm">
-                <i class="bi bi-receipt me-1"></i> Lập hóa đơn
-            </a>
-            <a href="payments/create" class="btn btn-success btn-sm">
-                <i class="bi bi-cash-coin me-1"></i> Thu tiền
-            </a>
+            <AuthorizeView Roles="ADMIN,SALES">
+                <a href="invoices/create" class="btn btn-primary btn-sm">
+                    <i class="bi bi-receipt me-1"></i> Lập hóa đơn
+                </a>
+            </AuthorizeView>
+            <AuthorizeView Roles="ADMIN,ACCOUNTANT">
+                <a href="payments/create" class="btn btn-success btn-sm">
+                    <i class="bi bi-cash-coin me-1"></i> Thu tiền
+                </a>
+            </AuthorizeView>
         </div>
     </div>
 
@@ -142,9 +149,15 @@
                                             <div class="d-flex justify-content-center gap-1">
                                                 @if (item.CurrentDebt > 0)
                                                 {
-                                                    <a href="payments/create?customerId=@item.CustomerId" class="btn btn-sm btn-outline-success" title="Thu tiền">
-                                                        <i class="bi bi-cash"></i>
-                                                    </a>
+                                                    <button class="btn btn-sm btn-outline-info" title="Soạn email nhắc nợ bằng AI" 
+                                                            @onclick="() => OpenAiModal(item)">
+                                                        <i class="bi bi-robot"></i>
+                                                    </button>
+                                                    <AuthorizeView Roles="ADMIN,ACCOUNTANT">
+                                                        <a href="payments/create?customerId=@item.CustomerId" class="btn btn-sm btn-outline-success" title="Thu tiền">
+                                                            <i class="bi bi-cash"></i>
+                                                        </a>
+                                                    </AuthorizeView>
                                                 }
                                                 <a href="customers/@item.CustomerId" class="btn btn-sm btn-outline-primary" title="Xem chi tiết">
                                                     <i class="bi bi-eye"></i>
@@ -181,11 +194,85 @@
     }
 </div>
 
+<!-- Modal Trợ lý AI Soạn Thư Nhắc Nợ (K4.3: Kế toán duyệt trước, AI không tự gửi / không tự đổi dữ liệu) -->
+@if (_showAiModal && _selectedDebt != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-robot me-2"></i>Trợ lý AI - Soạn Thảo Email Nhắc Nợ Khách Hàng
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseAiModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3 bg-light p-3 rounded flex-wrap gap-2">
+                        <div>
+                            <span class="text-muted small">Khách hàng:</span>
+                            <div class="fw-bold fs-6">[@_selectedDebt.CustomerCode] @_selectedDebt.CustomerName</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="text-muted small">Công nợ hiện tại:</span>
+                            <div class="fw-bold text-danger fs-5">@_selectedDebt.CurrentDebt.ToString("N0") đ</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 d-flex align-items-center gap-3">
+                        <label class="form-label fw-semibold mb-0 small">Giọng văn thư nhắc nợ:</label>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn @(_aiTone == "polite" ? "btn-primary" : "btn-outline-primary")" 
+                                    @onclick='() => ChangeTone("polite")'>
+                                Lịch sự (Định kỳ)
+                            </button>
+                            <button type="button" class="btn @(_aiTone == "urgent" ? "btn-danger" : "btn-outline-danger")" 
+                                    @onclick='() => ChangeTone("urgent")'>
+                                Khẩn cấp (Quá hạn)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-semibold small mb-0">Nội dung thư do AI đề xuất (Kế toán có thể chỉnh sửa trực tiếp):</label>
+                            @if (_isGeneratingAi)
+                            {
+                                <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+                            }
+                        </div>
+                        <textarea class="form-control font-monospace small" rows="12" @bind="_aiDraftEmail"></textarea>
+                    </div>
+
+                    <!-- Cảnh báo An toàn & Quy chuẩn AI K4.3 -->
+                    <div class="alert alert-info py-2 px-3 small mb-0">
+                        <i class="bi bi-shield-check text-primary me-1"></i>
+                        <strong>Quy chuẩn bảo mật AI (K4.3):</strong> AI chỉ hỗ trợ tạo bản thảo nội dung. Kế toán chịu trách nhiệm rà soát trước khi gửi.
+                        Hệ thống <em>tuyệt đối không tự gửi email</em>, <em>không tự ghi nhận thanh toán</em> và <em>không tự thay đổi hạn mức tín dụng</em>.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseAiModal">Đóng</button>
+                    <button type="button" class="btn btn-success" @onclick="CopyDraft">
+                        <i class="bi bi-clipboard-check me-1"></i> Sao chép nội dung
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private bool _loading = true;
     private List<CustomerDebtDto> _debtList = new();
     private string _searchTerm = "";
     private string _filterMode = "all";
+
+    // AI Modal State
+    private bool _showAiModal = false;
+    private CustomerDebtDto? _selectedDebt;
+    private string _aiDraftEmail = string.Empty;
+    private string _aiTone = "polite";
+    private bool _isGeneratingAi = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -225,4 +312,46 @@
 
         return matchSearch && matchFilter;
     });
+
+    private async Task OpenAiModal(CustomerDebtDto debt)
+    {
+        _selectedDebt = debt;
+        _showAiModal = true;
+        _aiTone = "polite";
+        await GenerateDraftAsync();
+    }
+
+    private void CloseAiModal()
+    {
+        _showAiModal = false;
+        _selectedDebt = null;
+        _aiDraftEmail = string.Empty;
+    }
+
+    private async Task ChangeTone(string tone)
+    {
+        _aiTone = tone;
+        await GenerateDraftAsync();
+    }
+
+    private async Task GenerateDraftAsync()
+    {
+        if (_selectedDebt == null) return;
+        _isGeneratingAi = true;
+        try
+        {
+            var unpaid = await InvoiceRepository.GetOutstandingInvoicesByCustomerAsync(_selectedDebt.CustomerId);
+            _aiDraftEmail = await DebtReminderAiService.DraftReminderEmailAsync(_selectedDebt, unpaid, _aiTone);
+        }
+        finally
+        {
+            _isGeneratingAi = false;
+        }
+    }
+
+    private void CopyDraft()
+    {
+        // Copy action note
+        CloseAiModal();
+    }
 }

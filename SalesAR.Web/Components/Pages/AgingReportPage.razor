@@ -1,4 +1,5 @@
 @page "/aging-report"
+@attribute [Authorize(Roles = "ADMIN,ACCOUNTANT")]
 @inject IGetAgingReportUseCase GetAgingReportUseCase
 
 <PageTitle>Báo cáo Tuổi nợ (Aging Report)</PageTitle>
@@ -11,14 +12,22 @@
             </h1>
             <p class="text-muted small mb-0">Phân loại công nợ phải thu theo các khoảng thời gian quá hạn (0–30, 31–60, 61–90, &gt;90 ngày)</p>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <div class="input-group input-group-sm">
-                <span class="input-group-text bg-white">Tính đến ngày:</span>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="input-group input-group-sm" style="max-width: 250px;">
+                <span class="input-group-text bg-white">Chốt ngày:</span>
                 <input type="date" class="form-control" @bind="_asOfDate" />
             </div>
             <button class="btn btn-primary btn-sm d-inline-flex align-items-center" @onclick="LoadReportAsync">
                 <i class="bi bi-arrow-clockwise me-1"></i> Tải lại
             </button>
+            <a href="@($"/api/reports/aging/excel?asOfDate={_asOfDate:yyyy-MM-dd}")" target="_blank" 
+               class="btn btn-success btn-sm d-inline-flex align-items-center" title="Tải xuống bảng tính Excel">
+                <i class="bi bi-file-earmark-excel me-1"></i> Xuất Excel
+            </a>
+            <a href="@($"/api/reports/aging/pdf?asOfDate={_asOfDate:yyyy-MM-dd}")" target="_blank" 
+               class="btn btn-danger btn-sm d-inline-flex align-items-center" title="Tải xuống tài liệu PDF">
+                <i class="bi bi-file-earmark-pdf me-1"></i> Xuất PDF
+            </a>
         </div>
     </div>
 
@@ -69,9 +78,19 @@
                 <h5 class="card-title fw-bold text-dark mb-0">
                     <i class="bi bi-table text-primary me-2"></i>Bảng Chi tiết Tuổi nợ theo Khách hàng
                 </h5>
-                <span class="badge bg-light text-dark border">
-                    Số khách hàng có nợ: @_summary.Items.Count(i => i.TotalDebt > 0)
-                </span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-light text-dark border">
+                        Số khách hàng có nợ: @_summary.Items.Count(i => i.TotalDebt > 0)
+                    </span>
+                    <a href="@($"/api/reports/aging/excel?asOfDate={_asOfDate:yyyy-MM-dd}")" target="_blank" 
+                       class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-download me-1"></i> Excel
+                    </a>
+                    <a href="@($"/api/reports/aging/pdf?asOfDate={_asOfDate:yyyy-MM-dd}")" target="_blank" 
+                       class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-download me-1"></i> PDF
+                    </a>
+                </div>
             </div>
             <div class="card-body p-0">
                 <AgingTable Summary="@_summary" ShowActionLink="true" />

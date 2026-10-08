@@ -1,0 +1,170 @@
+@page "/admin/roles"
+@attribute [Authorize(Roles = "ADMIN")]
+@inject IViewRolesUseCase ViewRolesUseCase
+@inject IViewUsersUseCase ViewUsersUseCase
+
+<PageTitle>Quản trị Vai trò & Quyền hạn - Sales & AR</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-shield-check text-danger me-2"></i>Quản trị Vai trò &amp; Phân quyền (Roles)
+            </h1>
+            <p class="text-muted small mb-0">Cấu hình vai trò và ma trận phân quyền hệ thống (Yêu cầu quyền ADMIN)</p>
+        </div>
+        <a href="admin/users" class="btn btn-outline-danger">
+            <i class="bi bi-people me-1"></i> Quản lý người dùng
+        </a>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-danger" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Roles List -->
+        <div class="row g-4 mb-4">
+            @foreach (var r in _roles)
+            {
+                var userCount = _users.Count(u => u.RoleId == r.Id);
+                <div class="col-12 col-md-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                            <span class="badge @(r.Name == "ADMIN" ? "bg-danger" : (r.Name == "SALES" ? "bg-primary" : "bg-success")) fs-6 px-3 py-2">
+                                @r.Name
+                            </span>
+                            <span class="badge bg-light text-dark border">@userCount tài khoản</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">@r.Description</p>
+                            
+                            <h6 class="fw-bold small text-dark mb-2">Quyền hạn chính:</h6>
+                            <ul class="list-unstyled small mb-0">
+                                @if (r.Name == "ADMIN")
+                                {
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Toàn quyền quản trị hệ thống</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Quản lý người dùng và phân quyền (/admin/*)</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Bán hàng, Khách hàng, Sản phẩm, Hóa đơn</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Kế toán công nợ, Thu tiền, Báo cáo &amp; Xuất Excel/PDF</li>
+                                }
+                                else if (r.Name == "SALES")
+                                {
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Xem &amp; quản lý Khách hàng (/customers)</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Xem &amp; quản lý Hàng hóa (/products)</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Lập Hóa đơn bán chịu (/invoices/create)</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Xem tổng hợp công nợ (/debt)</li>
+                                    <li class="mb-1 text-danger"><i class="bi bi-x-circle-fill me-1"></i>Không có quyền Quản trị (/admin/*)</li>
+                                }
+                                else if (r.Name == "ACCOUNTANT")
+                                {
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Xem tổng hợp công nợ (/debt)</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Ghi nhận Thu tiền &amp; Phân bổ FIFO (/payments/create)</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Báo cáo phân tích Tuổi nợ (/aging-report)</li>
+                                    <li class="mb-1 text-success"><i class="bi bi-check-circle-fill me-1"></i>Xuất Báo cáo Excel &amp; PDF</li>
+                                    <li class="mb-1 text-danger"><i class="bi bi-x-circle-fill me-1"></i>Không có quyền Quản trị (/admin/*)</li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Role Matrix Table -->
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 border-0">
+                <h5 class="card-title fw-bold text-dark mb-0">
+                    <i class="bi bi-grid-3x3-gap-fill text-danger me-2"></i>Ma trận Phân quyền Chức năng (RBAC)
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle mb-0 text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-start">Chức năng / Route</th>
+                                <th style="width: 150px;"><span class="badge bg-danger">ADMIN</span></th>
+                                <th style="width: 150px;"><span class="badge bg-primary">SALES</span></th>
+                                <th style="width: 150px;"><span class="badge bg-success">ACCOUNTANT</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-start fw-semibold">Dashboard (/dashboard)</td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="text-start fw-semibold">Quản lý Khách hàng (/customers)</td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="text-start fw-semibold">Quản lý Sản phẩm (/products)</td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-muted"><i class="bi bi-dash-lg"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="text-start fw-semibold">Lập Hóa đơn bán hàng (/invoices/create)</td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-muted"><i class="bi bi-dash-lg"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="text-start fw-semibold">Thu tiền &amp; Phân bổ FIFO (/payments/create)</td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-muted"><i class="bi bi-dash-lg"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="text-start fw-semibold">Theo dõi Công nợ (/debt)</td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="text-start fw-semibold">Báo cáo Tuổi nợ &amp; Xuất Excel/PDF (/aging-report)</td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                                <td class="text-muted"><i class="bi bi-dash-lg"></i></td>
+                                <td class="text-success"><i class="bi bi-check-lg fs-5"></i></td>
+                            </tr>
+                            <tr class="table-warning">
+                                <td class="text-start fw-bold text-danger">Quản trị Người dùng &amp; Vai trò (/admin/*)</td>
+                                <td class="text-success fw-bold"><i class="bi bi-check-lg fs-5"></i> CÓ QUYỀN</td>
+                                <td class="text-danger fw-bold"><i class="bi bi-x-lg fs-5"></i> BỊ CHẶN</td>
+                                <td class="text-danger fw-bold"><i class="bi bi-x-lg fs-5"></i> BỊ CHẶN</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<Role> _roles = new();
+    private List<User> _users = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _roles = (await ViewRolesUseCase.ExecuteAsync()).ToList();
+            _users = (await ViewUsersUseCase.ExecuteAsync()).ToList();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

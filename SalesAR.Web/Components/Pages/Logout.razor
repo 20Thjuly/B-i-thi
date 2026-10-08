@@ -1,0 +1,23 @@
+@page "/logout"
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Đang đăng xuất...</PageTitle>
+
+<div class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="text-muted mt-2">Đang đăng xuất khỏi hệ thống...</p>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var customAuth = (CustomAuthenticationStateProvider)AuthStateProvider;
+            await customAuth.MarkUserAsLoggedOutAsync();
+            Navigation.NavigateTo("login", forceLoad: false);
+        }
+    }
+}

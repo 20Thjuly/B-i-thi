@@ -1,0 +1,288 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "ADMIN")]
+@inject IViewUsersUseCase ViewUsersUseCase
+@inject ICreateUserUseCase CreateUserUseCase
+@inject IToggleUserStatusUseCase ToggleUserStatusUseCase
+@inject IViewRolesUseCase ViewRolesUseCase
+
+<PageTitle>Quản trị Người dùng - Sales & AR</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-people-fill text-danger me-2"></i>Quản trị Người dùng Hệ thống
+            </h1>
+            <p class="text-muted small mb-0">Quản lý danh sách tài khoản, phân quyền vai trò và trạng thái hoạt động (Yêu cầu quyền ADMIN)</p>
+        </div>
+        <button class="btn btn-danger d-inline-flex align-items-center" @onclick="OpenCreateModal">
+            <i class="bi bi-person-plus-fill me-1"></i> Tạo tài khoản mới
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@_statusMessage
+            <button type="button" class="btn-close" @onclick="() => _statusMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+        </div>
+    }
+
+    <!-- Users Table -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            @if (_loading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-danger" role="status"></div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Tên đăng nhập</th>
+                                <th>Họ và tên</th>
+                                <th>Email</th>
+                                <th class="text-center">Vai trò</th>
+                                <th class="text-center">Trạng thái</th>
+                                <th class="text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_users.Any())
+                            {
+                                int stt = 1;
+                                @foreach (var u in _users)
+                                {
+                                    <tr>
+                                        <td class="text-muted">@(stt++)</td>
+                                        <td class="fw-bold text-dark">
+                                            <i class="bi bi-person-circle text-secondary me-1"></i>@u.Username
+                                        </td>
+                                        <td>@u.FullName</td>
+                                        <td class="text-muted">@(string.IsNullOrEmpty(u.Email) ? "-" : u.Email)</td>
+                                        <td class="text-center">
+                                            @if (u.RoleName == "ADMIN")
+                                            {
+                                                <span class="badge bg-danger">ADMIN</span>
+                                            }
+                                            else if (u.RoleName == "SALES")
+                                            {
+                                                <span class="badge bg-primary">SALES</span>
+                                            }
+                                            else if (u.RoleName == "ACCOUNTANT")
+                                            {
+                                                <span class="badge bg-success">ACCOUNTANT</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">@u.RoleName</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (u.IsActive)
+                                            {
+                                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đang hoạt động</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>Đã khóa</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (u.Username.Equals("admin", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="text-muted small italic">Tài khoản gốc</span>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm @(u.IsActive ? "btn-outline-warning" : "btn-outline-success")" 
+                                                        @onclick="() => ToggleStatus(u)">
+                                                    @if (u.IsActive)
+                                                    {
+                                                        <span><i class="bi bi-lock me-1"></i>Khóa</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span><i class="bi bi-unlock me-1"></i>Kích hoạt</span>
+                                                    }
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">Chưa có người dùng nào.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal Thêm Người dùng Mới -->
+@if (_showCreateModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-person-plus-fill me-2"></i>Tạo Người dùng Mới
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseCreateModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tên đăng nhập <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="_newUser.Username" placeholder="VD: user123" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Mật khẩu ban đầu <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" @bind="_newPassword" placeholder="Nhập mật khẩu..." />
+                        <div class="form-text text-muted">Mật khẩu sẽ được hash bảo mật bằng PBKDF2-SHA256 trước khi lưu.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Họ và tên <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="_newUser.FullName" placeholder="VD: Nguyễn Văn A" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Email</label>
+                        <input type="email" class="form-control" @bind="_newUser.Email" placeholder="VD: a@example.com" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Vai trò <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="_newUser.RoleId">
+                            <option value="0">-- Chọn vai trò --</option>
+                            @foreach (var r in _roles)
+                            {
+                                <option value="@r.Id">@r.Name - @r.Description</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Hủy</button>
+                    <button type="button" class="btn btn-danger" @onclick="SaveUser">
+                        <i class="bi bi-check-circle me-1"></i> Lưu tài khoản
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private List<User> _users = new();
+    private List<Role> _roles = new();
+
+    private string? _statusMessage;
+    private string? _errorMessage;
+
+    private bool _showCreateModal = false;
+    private User _newUser = new();
+    private string _newPassword = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        try
+        {
+            _users = (await ViewUsersUseCase.ExecuteAsync()).ToList();
+            _roles = (await ViewRolesUseCase.ExecuteAsync()).ToList();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ToggleStatus(User user)
+    {
+        try
+        {
+            bool newStatus = !user.IsActive;
+            await ToggleUserStatusUseCase.ExecuteAsync(user.Id, newStatus);
+            user.IsActive = newStatus;
+            _statusMessage = $"Đã {(newStatus ? "kích hoạt" : "khóa")} tài khoản {user.Username} thành công.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Lỗi khi thay đổi trạng thái: {ex.Message}";
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        _newUser = new User { RoleId = _roles.FirstOrDefault()?.Id ?? 0 };
+        _newPassword = string.Empty;
+        _showCreateModal = true;
+        _errorMessage = null;
+    }
+
+    private void CloseCreateModal()
+    {
+        _showCreateModal = false;
+    }
+
+    private async Task SaveUser()
+    {
+        _errorMessage = null;
+        if (string.IsNullOrWhiteSpace(_newUser.Username))
+        {
+            _errorMessage = "Vui lòng nhập tên đăng nhập.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_newPassword))
+        {
+            _errorMessage = "Vui lòng nhập mật khẩu ban đầu.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_newUser.FullName))
+        {
+            _errorMessage = "Vui lòng nhập họ và tên.";
+            return;
+        }
+        if (_newUser.RoleId <= 0)
+        {
+            _errorMessage = "Vui lòng chọn vai trò cho người dùng.";
+            return;
+        }
+
+        try
+        {
+            await CreateUserUseCase.ExecuteAsync(_newUser, _newPassword);
+            _statusMessage = $"Đã tạo tài khoản {_newUser.Username} thành công!";
+            _showCreateModal = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}

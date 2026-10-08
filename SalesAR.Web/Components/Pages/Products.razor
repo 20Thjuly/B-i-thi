@@ -1,4 +1,5 @@
 @page "/products"
+@attribute [Authorize(Roles = "ADMIN,SALES")]
 @inject IViewProductsUseCase ViewProductsUseCase
 @inject IAddProductUseCase AddProductUseCase
 @inject IEditProductUseCase EditProductUseCase
