@@ -1,0 +1,254 @@
+@page "/customers/{Id:int}"
+@inject IViewCustomerByIdUseCase ViewCustomerByIdUseCase
+@inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
+@inject IInvoiceRepository InvoiceRepository
+@inject IPaymentRepository PaymentRepository
+@inject NavigationManager Navigation
+
+<PageTitle>Chi tiết Khách hàng - @(_customer?.Name ?? "Loading...")</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="mb-4">
+        <a href="customers" class="text-decoration-none small text-muted d-inline-flex align-items-center mb-2">
+            <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách khách hàng
+        </a>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h1 class="h3 fw-bold text-dark mb-1">
+                    <i class="bi bi-person-badge text-primary me-2"></i>@(_customer?.Name ?? "Đang tải...")
+                </h1>
+                <div class="text-muted small">
+                    Mã KH: <span class="badge bg-light text-dark border">@_customer?.Code</span>
+                    | SĐT: @_customer?.Phone
+                    | Trạng thái: @(_customer?.IsActive == true ? "Đang hoạt động" : "Đã khóa")
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="invoices/create" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-receipt me-1"></i> Lập hóa đơn
+                </a>
+                <a href="payments/create" class="btn btn-outline-success btn-sm">
+                    <i class="bi bi-cash-coin me-1"></i> Thu tiền
+                </a>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (_customer == null)
+    {
+        <div class="alert alert-warning">Không tìm thấy thông tin khách hàng với ID: @Id</div>
+    }
+    else
+    {
+        <!-- Thẻ tóm tắt Công nợ & Hạn mức tín dụng -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="Hạn mức tín dụng" 
+                                  Amount="@_customer.CreditLimit" 
+                                  Icon="bi-shield-check" 
+                                  Subtitle="@($"Kỳ hạn thanh toán: {_customer.PaymentTermDays} ngày")" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="Hiện đang nợ" 
+                                  Amount="@(_debtInfo?.CurrentDebt ?? 0)" 
+                                  Icon="bi-wallet2" 
+                                  CardClass="border-start border-danger border-4" 
+                                  Subtitle="Tổng số dư hóa đơn chưa trả" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="Hạn mức còn lại" 
+                                  Amount="@(_debtInfo?.AvailableCredit ?? 0)" 
+                                  Icon="bi-check-circle-fill" 
+                                  CardClass="border-start border-success border-4" 
+                                  Subtitle="Khả dụng cho các đơn hàng mới" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="Đã thanh toán lũy kế" 
+                                  Amount="@(_debtInfo?.TotalPaid ?? 0)" 
+                                  Icon="bi-cash-stack" 
+                                  Subtitle="Tổng tiền thu từ trước đến nay" />
+            </div>
+        </div>
+
+        <!-- Tabs hoặc danh sách chi tiết: Hóa đơn, Phiếu thu, Phân bổ -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white p-3 border-bottom">
+                <ul class="nav nav-pills card-header-pills">
+                    <li class="nav-item">
+                        <button class="nav-link @(_activeTab == "invoices" ? "active" : "")" 
+                                @onclick="@(() => _activeTab = "invoices")">
+                            <i class="bi bi-receipt me-1"></i> Danh sách Hóa đơn (@_invoices.Count())
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link @(_activeTab == "payments" ? "active" : "")" 
+                                @onclick="@(() => _activeTab = "payments")">
+                            <i class="bi bi-cash me-1"></i> Lịch sử Thu tiền (@_payments.Count())
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link @(_activeTab == "allocations" ? "active" : "")" 
+                                @onclick="@(() => _activeTab = "allocations")">
+                            <i class="bi bi-diagram-3 me-1"></i> Phân bổ thanh toán (@_allocations.Count())
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body p-0">
+                @if (_activeTab == "invoices")
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Số HĐ</th>
+                                    <th>Ngày lập</th>
+                                    <th>Hạn thanh toán</th>
+                                    <th class="text-end">Tổng tiền</th>
+                                    <th class="text-center">Trạng thái</th>
+                                    <th class="text-center">Chi tiết</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_invoices.Any())
+                                {
+                                    @foreach (var inv in _invoices)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">@inv.InvoiceNumber</td>
+                                            <td>@inv.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                            <td>@inv.DueDate.ToString("dd/MM/yyyy")</td>
+                                            <td class="text-end fw-semibold">@inv.TotalAmount.ToString("N0") đ</td>
+                                            <td class="text-center">
+                                                <InvoiceStatusBadge Status="@inv.Status" />
+                                            </td>
+                                            <td class="text-center">
+                                                <a href="invoices/@inv.Id" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4 text-muted">Chưa có hóa đơn nào.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else if (_activeTab == "payments")
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mã phiếu thu</th>
+                                    <th>Ngày thu</th>
+                                    <th class="text-end">Số tiền thu</th>
+                                    <th>Ghi chú</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_payments.Any())
+                                {
+                                    @foreach (var p in _payments)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">@p.PaymentNumber</td>
+                                            <td>@p.PaymentDate.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td class="text-end fw-bold text-success">@p.Amount.ToString("N0") đ</td>
+                                            <td class="text-muted">@(string.IsNullOrEmpty(p.Note) ? "-" : p.Note)</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center py-4 text-muted">Chưa có giao dịch thu tiền nào.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else if (_activeTab == "allocations")
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mã PB</th>
+                                    <th>Mã Phiếu thu (Id)</th>
+                                    <th>Mã Hóa đơn (Id)</th>
+                                    <th class="text-end">Số tiền phân bổ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_allocations.Any())
+                                {
+                                    @foreach (var a in _allocations)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">#@a.Id</td>
+                                            <td>Phiếu thu #@a.PaymentId</td>
+                                            <td>Hóa đơn #@a.InvoiceId</td>
+                                            <td class="text-end fw-semibold text-primary">@a.AllocatedAmount.ToString("N0") đ</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center py-4 text-muted">Chưa có lịch sử phân bổ.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private string _activeTab = "invoices";
+    private Customer? _customer;
+    private CustomerDebtDto? _debtInfo;
+    private IEnumerable<Invoice> _invoices = Enumerable.Empty<Invoice>();
+    private IEnumerable<Payment> _payments = Enumerable.Empty<Payment>();
+    private IEnumerable<PaymentAllocation> _allocations = Enumerable.Empty<PaymentAllocation>();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _customer = await ViewCustomerByIdUseCase.ExecuteAsync(Id);
+            if (_customer != null)
+            {
+                _debtInfo = await GetCustomerDebtUseCase.ExecuteAsync(Id);
+                _invoices = await InvoiceRepository.GetInvoicesByCustomerAsync(Id);
+                _payments = await PaymentRepository.GetPaymentsByCustomerAsync(Id);
+                _allocations = await PaymentRepository.GetAllocationsByCustomerAsync(Id);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

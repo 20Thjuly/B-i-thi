@@ -1,0 +1,44 @@
+@inject IViewProductsUseCase ViewProductsUseCase
+
+<div class="mb-2">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="form-label fw-semibold">@Label</label>
+    }
+    <select class="form-select @CssClass" value="@SelectedProductId" @onchange="HandleSelectionChanged">
+        <option value="0">-- Chọn sản phẩm --</option>
+        @if (_products != null)
+        {
+            @foreach (var p in _products)
+            {
+                <option value="@p.Id">[@p.Code] @p.Name - Giá: @p.Price.ToString("N0") đ (Tồn: @p.StockQuantity @p.Unit)</option>
+            }
+        }
+    </select>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public int SelectedProductId { get; set; }
+    [Parameter] public EventCallback<int> SelectedProductIdChanged { get; set; }
+    [Parameter] public EventCallback<Product?> OnProductChanged { get; set; }
+
+    private IEnumerable<Product>? _products;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _products = (await ViewProductsUseCase.ExecuteAsync()).Where(p => p.IsActive);
+    }
+
+    private async Task HandleSelectionChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            SelectedProductId = id;
+            await SelectedProductIdChanged.InvokeAsync(id);
+            var selectedProd = _products?.FirstOrDefault(p => p.Id == id);
+            await OnProductChanged.InvokeAsync(selectedProd);
+        }
+    }
+}

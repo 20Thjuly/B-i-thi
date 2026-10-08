@@ -38,6 +38,7 @@ public class FakeInvoiceRepository : IInvoiceRepository
     public Task<Invoice?> GetByInvoiceNumberAsync(string invoiceNumber) => Task.FromResult<Invoice?>(null);
     public Task<IEnumerable<InvoiceLine>> GetLinesByInvoiceIdAsync(int invoiceId) => Task.FromResult<IEnumerable<InvoiceLine>>(Array.Empty<InvoiceLine>());
     public Task<IEnumerable<Invoice>> GetUnpaidInvoicesByCustomerAsync(int customerId) => Task.FromResult<IEnumerable<Invoice>>(Array.Empty<Invoice>());
+    public Task<IEnumerable<Invoice>> GetInvoicesByCustomerAsync(int customerId) => Task.FromResult<IEnumerable<Invoice>>(Array.Empty<Invoice>());
     public Task<IEnumerable<InvoiceOutstandingDto>> GetOutstandingInvoicesByCustomerAsync(int customerId) => Task.FromResult<IEnumerable<InvoiceOutstandingDto>>(Array.Empty<InvoiceOutstandingDto>());
     
     public Task<int> CreateInvoiceWithLinesAsync(Invoice invoice, IEnumerable<InvoiceLine> lines)

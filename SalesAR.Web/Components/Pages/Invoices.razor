@@ -1,0 +1,174 @@
+@page "/invoices"
+@inject IViewInvoicesUseCase ViewInvoicesUseCase
+@inject IViewCustomersUseCase ViewCustomersUseCase
+
+<PageTitle>Danh sách Hóa đơn Bán hàng</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-receipt text-primary me-2"></i>Danh sách Hóa đơn
+            </h1>
+            <p class="text-muted small mb-0">Quản lý hóa đơn bán chịu và theo dõi trạng thái thanh toán</p>
+        </div>
+        <a href="invoices/create" class="btn btn-primary d-inline-flex align-items-center">
+            <i class="bi bi-plus-circle me-1"></i> Lập hóa đơn mới
+        </a>
+    </div>
+
+    <!-- Filter toolbar -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-center">
+                <div class="col-12 col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" class="form-control border-start-0" placeholder="Tìm theo số hóa đơn..." 
+                               @bind="_searchTerm" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <select class="form-select" @bind="_filterCustomerId">
+                        <option value="0">-- Tất cả khách hàng --</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">[@c.Code] @c.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <select class="form-select" @bind="_filterStatus">
+                        <option value="all">Tất cả trạng thái</option>
+                        <option value="Unpaid">Chưa thanh toán</option>
+                        <option value="PartiallyPaid">Thanh toán 1 phần</option>
+                        <option value="Paid">Đã thanh toán</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            @if (_loading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Số HĐ</th>
+                                <th>Khách hàng</th>
+                                <th>Ngày lập</th>
+                                <th>Hạn thanh toán</th>
+                                <th class="text-end">Tổng tiền (VNĐ)</th>
+                                <th class="text-center">Trạng thái</th>
+                                <th class="text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (FilteredInvoices.Any())
+                            {
+                                @foreach (var inv in FilteredInvoices)
+                                {
+                                    var cust = _customers.FirstOrDefault(c => c.Id == inv.CustomerId);
+                                    <tr>
+                                        <td>
+                                            <a href="invoices/@inv.Id" class="fw-bold text-dark text-decoration-none">
+                                                @inv.InvoiceNumber
+                                            </a>
+                                        </td>
+                                        <td>
+                                            @if (cust != null)
+                                            {
+                                                <a href="customers/@cust.Id" class="text-decoration-none fw-semibold">
+                                                    [@cust.Code] @cust.Name
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Mã: @inv.CustomerId</span>
+                                            }
+                                        </td>
+                                        <td>@inv.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                        <td>
+                                            @inv.DueDate.ToString("dd/MM/yyyy")
+                                            @if (inv.DueDate < DateTime.Today && inv.Status != "Paid")
+                                            {
+                                                <span class="badge bg-danger ms-1" style="font-size: 0.7rem;">Quá hạn</span>
+                                            }
+                                        </td>
+                                        <td class="text-end fw-bold text-dark">@inv.TotalAmount.ToString("N0") đ</td>
+                                        <td class="text-center">
+                                            <InvoiceStatusBadge Status="@inv.Status" />
+                                        </td>
+                                        <td class="text-center">
+                                            <a href="invoices/@inv.Id" class="btn btn-sm btn-outline-primary" title="Xem chi tiết">
+                                                <i class="bi bi-eye me-1"></i>Chi tiết
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">
+                                        Không tìm thấy hóa đơn nào phù hợp.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<Invoice> _invoices = new();
+    private List<Customer> _customers = new();
+
+    private string _searchTerm = "";
+    private int _filterCustomerId = 0;
+    private string _filterStatus = "all";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _invoices = (await ViewInvoicesUseCase.ExecuteAsync()).ToList();
+            _customers = (await ViewCustomersUseCase.ExecuteAsync()).ToList();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private IEnumerable<Invoice> FilteredInvoices => _invoices.Where(inv =>
+    {
+        bool matchSearch = string.IsNullOrWhiteSpace(_searchTerm) ||
+                           inv.InvoiceNumber.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase);
+
+        bool matchCustomer = _filterCustomerId == 0 || inv.CustomerId == _filterCustomerId;
+
+        bool matchStatus = _filterStatus switch
+        {
+            "all" => true,
+            _ => string.Equals(inv.Status, _filterStatus, StringComparison.OrdinalIgnoreCase)
+        };
+
+        return matchSearch && matchCustomer && matchStatus;
+    });
+}

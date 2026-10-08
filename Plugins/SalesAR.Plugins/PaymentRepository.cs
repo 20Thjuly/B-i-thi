@@ -28,6 +28,13 @@ public class PaymentRepository : IPaymentRepository
         return await connection.QuerySingleOrDefaultAsync<Payment>(sql, new { Id = id });
     }
 
+    public async Task<IEnumerable<Payment>> GetPaymentsByCustomerAsync(int customerId)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        const string sql = "SELECT Id, PaymentNumber, CustomerId, PaymentDate, Amount, Note FROM dbo.Payments WHERE CustomerId = @CustomerId ORDER BY PaymentDate DESC;";
+        return await connection.QueryAsync<Payment>(sql, new { CustomerId = customerId });
+    }
+
     public async Task<IEnumerable<PaymentAllocation>> GetAllocationsByPaymentIdAsync(int paymentId)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -35,7 +42,18 @@ public class PaymentRepository : IPaymentRepository
         return await connection.QueryAsync<PaymentAllocation>(sql, new { PaymentId = paymentId });
     }
 
-    // Ghi nhận thanh toán và phân bổ theo 1 transaction
+    public async Task<IEnumerable<PaymentAllocation>> GetAllocationsByCustomerAsync(int customerId)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        const string sql = @"
+            SELECT pa.Id, pa.PaymentId, pa.InvoiceId, pa.AllocatedAmount
+            FROM dbo.PaymentAllocations pa
+            INNER JOIN dbo.Payments p ON pa.PaymentId = p.Id
+            WHERE p.CustomerId = @CustomerId
+            ORDER BY pa.Id DESC;";
+        return await connection.QueryAsync<PaymentAllocation>(sql, new { CustomerId = customerId });
+    }
+
     public async Task<int> CreatePaymentWithAllocationsAsync(Payment payment, IEnumerable<PaymentAllocation> allocations)
     {
         using var connection = _connectionFactory.CreateConnection();

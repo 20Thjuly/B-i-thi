@@ -1,0 +1,78 @@
+@using SalesAR.UseCases.Models
+
+<div class="table-responsive">
+    <table class="table table-hover table-striped align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Khách hàng</th>
+                <th class="text-end">Hạn mức</th>
+                <th class="text-end">Tổng công nợ</th>
+                <th class="text-end">0–30 ngày</th>
+                <th class="text-end">31–60 ngày</th>
+                <th class="text-end">61–90 ngày</th>
+                <th class="text-end text-danger">>90 ngày</th>
+                <th class="text-end">Hạn mức còn lại</th>
+                @if (ShowActionLink)
+                {
+                    <th class="text-center">Thao tác</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @if (Summary != null && Summary.Items.Any())
+            {
+                @foreach (var item in Summary.Items)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-bold">@item.CustomerCode</div>
+                            <div class="small text-muted">@item.CustomerName</div>
+                        </td>
+                        <td class="text-end">@item.CreditLimit.ToString("N0") đ</td>
+                        <td class="text-end fw-bold text-danger">@item.TotalDebt.ToString("N0") đ</td>
+                        <td class="text-end">@item.Bucket0To30.ToString("N0") đ</td>
+                        <td class="text-end">@item.Bucket31To60.ToString("N0") đ</td>
+                        <td class="text-end">@item.Bucket61To90.ToString("N0") đ</td>
+                        <td class="text-end fw-bold text-danger">@item.BucketOver90.ToString("N0") đ</td>
+                        <td class="text-end text-success fw-semibold">@item.AvailableCredit.ToString("N0") đ</td>
+                        @if (ShowActionLink)
+                        {
+                            <td class="text-center">
+                                <a href="customers/@item.CustomerId" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye me-1"></i>Chi tiết
+                                </a>
+                            </td>
+                        }
+                    </tr>
+                }
+                <tr class="table-secondary fw-bold">
+                    <td>TỔNG CỘNG</td>
+                    <td class="text-end">@Summary.TotalCreditLimit.ToString("N0") đ</td>
+                    <td class="text-end text-danger">@Summary.TotalDebt.ToString("N0") đ</td>
+                    <td class="text-end">@Summary.Total0To30.ToString("N0") đ</td>
+                    <td class="text-end">@Summary.Total31To60.ToString("N0") đ</td>
+                    <td class="text-end">@Summary.Total61To90.ToString("N0") đ</td>
+                    <td class="text-end text-danger">@Summary.TotalOver90.ToString("N0") đ</td>
+                    <td class="text-end text-success">@((Summary.TotalCreditLimit - Summary.TotalDebt).ToString("N0")) đ</td>
+                    @if (ShowActionLink)
+                    {
+                        <td></td>
+                    }
+                </tr>
+            }
+            else
+            {
+                <tr>
+                    <td colspan="@(ShowActionLink ? 9 : 8)" class="text-center py-4 text-muted">
+                        <i class="bi bi-info-circle me-1"></i>Không có dữ liệu công nợ.
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter] public AgingReportSummary? Summary { get; set; }
+    [Parameter] public bool ShowActionLink { get; set; } = true;
+}

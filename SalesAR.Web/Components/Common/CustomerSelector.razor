@@ -1,0 +1,44 @@
+@inject IViewCustomersUseCase ViewCustomersUseCase
+
+<div class="mb-3">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="form-label fw-semibold">@Label</label>
+    }
+    <select class="form-select @CssClass" value="@SelectedCustomerId" @onchange="HandleSelectionChanged">
+        <option value="0">-- Chọn khách hàng --</option>
+        @if (_customers != null)
+        {
+            @foreach (var c in _customers)
+            {
+                <option value="@c.Id">[@c.Code] @c.Name (Hạn mức: @c.CreditLimit.ToString("N0") đ)</option>
+            }
+        }
+    </select>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Khách hàng";
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public int SelectedCustomerId { get; set; }
+    [Parameter] public EventCallback<int> SelectedCustomerIdChanged { get; set; }
+    [Parameter] public EventCallback<Customer?> OnCustomerChanged { get; set; }
+
+    private IEnumerable<Customer>? _customers;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _customers = (await ViewCustomersUseCase.ExecuteAsync()).Where(c => c.IsActive);
+    }
+
+    private async Task HandleSelectionChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            SelectedCustomerId = id;
+            await SelectedCustomerIdChanged.InvokeAsync(id);
+            var selectedCust = _customers?.FirstOrDefault(c => c.Id == id);
+            await OnCustomerChanged.InvokeAsync(selectedCust);
+        }
+    }
+}

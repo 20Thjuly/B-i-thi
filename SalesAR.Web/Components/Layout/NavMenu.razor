@@ -1,6 +1,8 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+<div class="top-row ps-3 navbar navbar-dark bg-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">SalesAR.Web</a>
+        <a class="navbar-brand fw-bold text-white d-flex align-items-center" href="">
+            <i class="bi bi-wallet2 text-primary me-2 fs-5"></i>Sales & AR
+        </a>
     </div>
 </div>
 
@@ -10,21 +12,44 @@
     <nav class="flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                <i class="bi bi-speedometer2 me-2"></i> Dashboard
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            <NavLink class="nav-link" href="customers">
+                <i class="bi bi-people-fill me-2"></i> Khách hàng
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            <NavLink class="nav-link" href="products">
+                <i class="bi bi-box-seam me-2"></i> Hàng hóa
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="invoices">
+                <i class="bi bi-receipt me-2"></i> Hóa đơn
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="payments">
+                <i class="bi bi-cash-stack me-2"></i> Thu tiền (FIFO)
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="debt">
+                <i class="bi bi-card-checklist me-2"></i> Tổng hợp Công nợ
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="aging-report">
+                <i class="bi bi-graph-up-arrow me-2"></i> Báo cáo Tuổi nợ
             </NavLink>
         </div>
     </nav>
 </div>
-

@@ -1,0 +1,272 @@
+@page "/invoices/{Id:int}"
+@inject IViewInvoicesUseCase ViewInvoicesUseCase
+@inject IViewCustomerByIdUseCase ViewCustomerByIdUseCase
+@inject IViewProductsUseCase ViewProductsUseCase
+@inject IPaymentRepository PaymentRepository
+@inject NavigationManager Navigation
+
+<PageTitle>Chi tiết Hóa đơn #@(_invoice?.InvoiceNumber ?? Id.ToString())</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="mb-4">
+        <a href="invoices" class="text-decoration-none small text-muted d-inline-flex align-items-center mb-2">
+            <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách hóa đơn
+        </a>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h1 class="h3 fw-bold text-dark mb-1 d-flex align-items-center flex-wrap gap-2">
+                    <i class="bi bi-receipt text-primary"></i>
+                    <span>Hóa đơn @_invoice?.InvoiceNumber</span>
+                    @if (_invoice != null)
+                    {
+                        <InvoiceStatusBadge Status="@_invoice.Status" />
+                    }
+                </h1>
+                <div class="text-muted small">
+                    Ngày lập: @_invoice?.InvoiceDate.ToString("dd/MM/yyyy") | 
+                    Hạn TT: @_invoice?.DueDate.ToString("dd/MM/yyyy")
+                    @if (_invoice != null && _invoice.DueDate < DateTime.Today && _invoice.Status != "Paid")
+                    {
+                        <span class="badge bg-danger ms-1">Đã quá hạn thanh toán</span>
+                    }
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                @if (_invoice != null && _invoice.Status != "Paid")
+                {
+                    <a href="payments/create?customerId=@_invoice.CustomerId" class="btn btn-success btn-sm">
+                        <i class="bi bi-cash-coin me-1"></i> Thu tiền hóa đơn này
+                    </a>
+                }
+                <a href="invoices/create" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i> Lập hóa đơn mới
+                </a>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (_invoice == null)
+    {
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-2"></i>Không tìm thấy hóa đơn với ID: @Id
+        </div>
+    }
+    else
+    {
+        <!-- KPI Summary Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="Tổng tiền hóa đơn" 
+                                  Amount="@_invoice.TotalAmount" 
+                                  Icon="bi-receipt-cutoff" 
+                                  CardClass="border-start border-primary border-4" 
+                                  Subtitle="Giá trị trước/đã gồm thuế" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="Đã thanh toán" 
+                                  Amount="@_totalPaid" 
+                                  Icon="bi-cash-stack" 
+                                  CardClass="border-start border-success border-4" 
+                                  Subtitle="Tiền đã thu theo FIFO" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="Còn nợ phải thu" 
+                                  Amount="@_remainingBalance" 
+                                  Icon="bi-hourglass-split" 
+                                  CardClass="@(_remainingBalance > 0 ? "border-start border-danger border-4" : "border-start border-success border-4")" 
+                                  Subtitle="@(_remainingBalance > 0 ? "Chưa thanh toán đủ" : "Đã tất toán xong")" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small fw-semibold">Khách hàng</span>
+                            <i class="bi bi-person text-secondary fs-5"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark mb-1">
+                            <a href="customers/@_customer?.Id" class="text-decoration-none">
+                                @(_customer?.Name ?? "Không rõ")
+                            </a>
+                        </h6>
+                        <div class="text-muted small">Mã: @_customer?.Code | SĐT: @_customer?.Phone</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chi tiết sản phẩm trong hóa đơn -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h5 class="card-title fw-bold text-dark mb-0">
+                    <i class="bi bi-box-seam text-primary me-2"></i>Danh mục Hàng hóa / Dịch vụ
+                </h5>
+                <span class="badge bg-light text-dark border">@_lines.Count dòng sản phẩm</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50px;" class="text-center">#</th>
+                                <th>Mã SP</th>
+                                <th>Tên sản phẩm</th>
+                                <th class="text-center">ĐVT</th>
+                                <th class="text-center" style="width: 120px;">Số lượng</th>
+                                <th class="text-end" style="width: 160px;">Đơn giá (VNĐ)</th>
+                                <th class="text-end" style="width: 180px;">Thành tiền (VNĐ)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_lines.Any())
+                            {
+                                int stt = 1;
+                                @foreach (var line in _lines)
+                                {
+                                    var prod = _products.FirstOrDefault(p => p.Id == line.ProductId);
+                                    <tr>
+                                        <td class="text-center text-muted">@(stt++)</td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">@(prod?.Code ?? line.ProductId.ToString())</span>
+                                        </td>
+                                        <td class="fw-semibold">@(prod?.Name ?? "Sản phẩm #" + line.ProductId)</td>
+                                        <td class="text-center text-muted">@(prod?.Unit ?? "-")</td>
+                                        <td class="text-center fw-bold">@line.Quantity.ToString("N0")</td>
+                                        <td class="text-end">@line.UnitPrice.ToString("N0") đ</td>
+                                        <td class="text-end fw-bold text-dark">@line.Amount.ToString("N0") đ</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">Không có dữ liệu dòng sản phẩm.</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="6" class="text-end fw-bold">TỔNG CỘNG HÓA ĐƠN:</td>
+                                <td class="text-end fw-bold text-primary fs-6">@_invoice.TotalAmount.ToString("N0") đ</td>
+                            </tr>
+                            <tr>
+                                <td colspan="6" class="text-end fw-semibold text-muted">Đã thanh toán (lũy kế):</td>
+                                <td class="text-end fw-semibold text-success">-@_totalPaid.ToString("N0") đ</td>
+                            </tr>
+                            <tr class="table-active">
+                                <td colspan="6" class="text-end fw-bold">SỐ TIỀN CÒN PHẢI THU:</td>
+                                <td class="text-end fw-bold @(_remainingBalance > 0 ? "text-danger" : "text-success") fs-5">
+                                    @_remainingBalance.ToString("N0") đ
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lịch sử các đợt thanh toán phân bổ cho hóa đơn này -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h5 class="card-title fw-bold text-dark mb-0">
+                    <i class="bi bi-clock-history text-primary me-2"></i>Lịch sử Phân bổ Thanh toán (FIFO)
+                </h5>
+                <span class="badge bg-light text-dark border">@_allocations.Count đợt phân bổ</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Mã phân bổ</th>
+                                <th>Phiếu thu</th>
+                                <th>Ngày thu tiền</th>
+                                <th class="text-end">Số tiền phân bổ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_allocations.Any())
+                            {
+                                @foreach (var alloc in _allocations)
+                                {
+                                    var payment = _payments.FirstOrDefault(p => p.Id == alloc.PaymentId);
+                                    <tr>
+                                        <td class="fw-bold">#@alloc.Id</td>
+                                        <td>
+                                            <span class="fw-semibold text-dark">
+                                                @(payment?.PaymentNumber ?? $"PT #{alloc.PaymentId}")
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(payment?.Note))
+                                            {
+                                                <div class="text-muted small">@payment.Note</div>
+                                            }
+                                        </td>
+                                        <td>@(payment?.PaymentDate.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                                        <td class="text-end fw-bold text-success">
+                                            @alloc.AllocatedAmount.ToString("N0") đ
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center py-4 text-muted">
+                                        Chưa có khoản thu nào được phân bổ cho hóa đơn này.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private Invoice? _invoice;
+    private Customer? _customer;
+    private List<InvoiceLine> _lines = new();
+    private List<Product> _products = new();
+    private List<PaymentAllocation> _allocations = new();
+    private List<Payment> _payments = new();
+
+    private decimal _totalPaid = 0;
+    private decimal _remainingBalance = 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _invoice = await ViewInvoicesUseCase.GetByIdAsync(Id);
+            if (_invoice != null)
+            {
+                _customer = await ViewCustomerByIdUseCase.ExecuteAsync(_invoice.CustomerId);
+                _lines = (await ViewInvoicesUseCase.GetLinesAsync(Id)).ToList();
+                _products = (await ViewProductsUseCase.ExecuteAsync()).ToList();
+
+                // Lấy tất cả phân bổ của khách hàng này để lọc ra các phân bổ thuộc InvoiceId
+                var customerAllocations = await PaymentRepository.GetAllocationsByCustomerAsync(_invoice.CustomerId);
+                _allocations = customerAllocations.Where(a => a.InvoiceId == Id).ToList();
+                _payments = (await PaymentRepository.GetPaymentsByCustomerAsync(_invoice.CustomerId)).ToList();
+
+                _totalPaid = _allocations.Sum(a => a.AllocatedAmount);
+                _remainingBalance = Math.Max(0, _invoice.TotalAmount - _totalPaid);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

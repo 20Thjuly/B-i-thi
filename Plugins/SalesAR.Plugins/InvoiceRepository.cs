@@ -43,6 +43,13 @@ public class InvoiceRepository : IInvoiceRepository
         return await connection.QueryAsync<InvoiceLine>(sql, new { InvoiceId = invoiceId });
     }
 
+    public async Task<IEnumerable<Invoice>> GetInvoicesByCustomerAsync(int customerId)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        const string sql = "SELECT Id, InvoiceNumber, CustomerId, InvoiceDate, DueDate, TotalAmount, Status FROM dbo.Invoices WHERE CustomerId = @CustomerId ORDER BY InvoiceDate DESC;";
+        return await connection.QueryAsync<Invoice>(sql, new { CustomerId = customerId });
+    }
+
     public async Task<IEnumerable<Invoice>> GetUnpaidInvoicesByCustomerAsync(int customerId)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -78,9 +85,6 @@ public class InvoiceRepository : IInvoiceRepository
         return await connection.QueryAsync<InvoiceOutstandingDto>(sql, new { CustomerId = customerId });
     }
 
-    // SECTION 4: CREATE INVOICE TRANSACTION (K2.2 & K2.3)
-    // Luồng: Begin Transaction -> Tạo Invoice -> Tạo InvoiceLine -> Cập nhật tồn kho (Stock) -> Commit.
-    // Lỗi bất kỳ bước nào: Rollback toàn bộ. Không bao giờ để Invoice tồn tại mà thiếu InvoiceLine.
     public async Task<int> CreateInvoiceWithLinesAsync(Invoice invoice, IEnumerable<InvoiceLine> lines)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -110,7 +114,6 @@ public class InvoiceRepository : IInvoiceRepository
                 line.InvoiceId = invoiceId;
                 await connection.ExecuteAsync(insertLineSql, line, transaction);
 
-                // Giảm tồn kho và kiểm tra tồn kho đủ
                 int rowsAffected = await connection.ExecuteAsync(updateStockSql, new { Quantity = line.Quantity, ProductId = line.ProductId }, transaction);
                 if (rowsAffected == 0)
                 {

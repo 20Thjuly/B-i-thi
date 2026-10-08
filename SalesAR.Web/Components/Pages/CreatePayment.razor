@@ -1,0 +1,505 @@
+@page "/payments/create"
+@inject IRecordPaymentUseCase RecordPaymentUseCase
+@inject IAllocatePaymentUseCase AllocatePaymentUseCase
+@inject IViewCustomersUseCase ViewCustomersUseCase
+@inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
+@inject IInvoiceRepository InvoiceRepository
+@inject NavigationManager Navigation
+
+<PageTitle>Ghi nhận Thu tiền & Phân bổ FIFO</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-cash-coin text-success me-2"></i>Ghi nhận Thu tiền Khách hàng
+            </h1>
+            <p class="text-muted small mb-0">Thực hiện thu tiền và tự động phân bổ cấn trừ công nợ theo nguyên tắc FIFO</p>
+        </div>
+        <a href="payments" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách
+        </a>
+    </div>
+
+    <!-- Friendly Business Error Alert (K3.3) -->
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger d-flex align-items-center mb-4 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3 text-danger"></i>
+            <div>
+                <strong>Cảnh báo nghiệp vụ:</strong> @_errorMessage
+            </div>
+        </div>
+    }
+
+    <!-- Result Box: Hiển thị kết quả FIFO sau khi ghi nhận thành công (Yêu cầu Mục 6) -->
+    @if (_isRecordedSuccess && _lastRecordedAllocations != null)
+    {
+        <div class="card shadow border-success mb-4">
+            <div class="card-header bg-success text-white py-3">
+                <h5 class="card-title fw-bold mb-0">
+                    <i class="bi bi-check-circle-fill me-2"></i>Ghi nhận Thu tiền Thành công!
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="p-3 bg-light rounded mb-3">
+                    <div class="row g-2">
+                        <div class="col-12 col-md-4">
+                            <span class="text-muted small">Mã phiếu thu:</span>
+                            <div class="fw-bold fs-6">@_model.PaymentNumber</div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <span class="text-muted small">Khách hàng:</span>
+                            <div class="fw-bold fs-6">@_selectedCustomer?.Name</div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <span class="text-muted small">Tổng số tiền đã thu:</span>
+                            <div class="fw-bold text-success fs-5">@_model.Amount.ToString("N0") đ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-dark mb-3">
+                    <i class="bi bi-diagram-3 me-2 text-primary"></i>Kết quả phân bổ công nợ theo nguyên tắc FIFO (Hóa đơn cũ nhất trước):
+                </h6>
+
+                <div class="table-responsive mb-3">
+                    <table class="table table-hover align-middle border">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Hóa đơn</th>
+                                <th>Ngày lập HĐ</th>
+                                <th class="text-end">Nợ trước thu</th>
+                                <th class="text-end">Số tiền cấn trừ (FIFO)</th>
+                                <th class="text-end">Nợ còn lại</th>
+                                <th class="text-center">Trạng thái sau cấn trừ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var res in _fifoResults)
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="invoices/@res.InvoiceId" class="fw-bold text-decoration-none">
+                                            @res.InvoiceNumber
+                                        </a>
+                                    </td>
+                                    <td>@res.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="text-end">@res.OriginalDebt.ToString("N0") đ</td>
+                                    <td class="text-end fw-bold @(res.AllocatedAmount > 0 ? "text-success" : "text-muted")">
+                                        @res.InvoiceNumber &rarr; @res.AllocatedAmount.ToString("N0") đ
+                                    </td>
+                                    <td class="text-end fw-semibold @(res.RemainingDebt > 0 ? "text-danger" : "text-muted")">
+                                        @res.RemainingDebt.ToString("N0") đ
+                                    </td>
+                                    <td class="text-center">
+                                        @if (res.RemainingDebt == 0)
+                                        {
+                                            <span class="badge bg-success">Đã tất toán</span>
+                                        }
+                                        else if (res.AllocatedAmount > 0)
+                                        {
+                                            <span class="badge bg-warning text-dark">Thanh toán 1 phần</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Chưa thanh toán</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold">Tổng phân bổ thực tế:</td>
+                                <td class="text-end fw-bold text-success fs-6">
+                                    @_fifoResults.Sum(r => r.AllocatedAmount).ToString("N0") đ
+                                </td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-primary" @onclick="ResetForm">
+                        <i class="bi bi-plus-circle me-1"></i> Thu tiền tiếp
+                    </button>
+                    <a href="payments" class="btn btn-outline-secondary">
+                        <i class="bi bi-list me-1"></i> Về danh sách phiếu thu
+                    </a>
+                    @if (_selectedCustomer != null)
+                    {
+                        <a href="customers/@_selectedCustomer.Id" class="btn btn-outline-info">
+                            <i class="bi bi-person me-1"></i> Xem chi tiết khách hàng
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="@_model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row g-4">
+                <!-- Form Inputs -->
+                <div class="col-12 col-lg-7">
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white py-3 border-0">
+                            <h5 class="card-title fw-bold text-dark mb-0">
+                                <i class="bi bi-card-text text-primary me-2"></i>Thông tin Phiếu thu
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <!-- Khách hàng -->
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Khách hàng thanh toán <span class="text-danger">*</span></label>
+                                    <CustomerSelector SelectedCustomerId="@_model.CustomerId" 
+                                                      SelectedCustomerIdChanged="OnCustomerSelected" />
+                                    <ValidationMessage For="() => _model.CustomerId" class="text-danger small" />
+                                </div>
+
+                                <!-- Số phiếu thu -->
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold">Số phiếu thu <span class="text-danger">*</span></label>
+                                    <InputText class="form-control" @bind-Value="_model.PaymentNumber" placeholder="VD: PT-001" />
+                                    <ValidationMessage For="() => _model.PaymentNumber" class="text-danger small" />
+                                </div>
+
+                                <!-- Ngày thu tiền -->
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold">Ngày thu tiền <span class="text-danger">*</span></label>
+                                    <InputDate class="form-control" @bind-Value="_model.PaymentDate" />
+                                    <ValidationMessage For="() => _model.PaymentDate" class="text-danger small" />
+                                </div>
+
+                                <!-- Số tiền thu -->
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Số tiền thu (VNĐ) <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <InputNumber class="form-control fs-5 fw-bold text-success" 
+                                                     @bind-Value="_model.Amount" 
+                                                     @bind-Value:after="OnAmountChanged" 
+                                                     placeholder="Nhập số tiền..." />
+                                        <span class="input-group-text fw-bold">VNĐ</span>
+                                    </div>
+                                    <ValidationMessage For="() => _model.Amount" class="text-danger small" />
+                                    @if (_selectedCustomer != null && _model.Amount > _totalOutstandingDebt && _totalOutstandingDebt > 0)
+                                    {
+                                        <div class="text-warning small mt-1">
+                                            <i class="bi bi-info-circle me-1"></i>Số tiền thu lớn hơn tổng công nợ hiện tại (@_totalOutstandingDebt.ToString("N0") đ).
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Ghi chú -->
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Ghi chú</label>
+                                    <InputTextArea class="form-control" @bind-Value="_model.Note" rows="2" 
+                                                   placeholder="Nhập ghi chú giao dịch hoặc hình thức chuyển khoản / tiền mặt..." />
+                                    <ValidationMessage For="() => _model.Note" class="text-danger small" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview Phân bổ FIFO -->
+                <div class="col-12 col-lg-5">
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-light py-3 border-0">
+                            <h5 class="card-title fw-bold text-dark mb-0">
+                                <i class="bi bi-clock-history text-primary me-2"></i>Dự kiến phân bổ FIFO
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            @if (_selectedCustomer == null)
+                            {
+                                <div class="text-center py-4 text-muted">
+                                    <i class="bi bi-person-x fs-2 d-block mb-2 text-secondary"></i>
+                                    Vui lòng chọn khách hàng để xem danh sách hóa đơn còn nợ và phân bổ FIFO.
+                                </div>
+                            }
+                            else if (_outstandingInvoices.Count == 0)
+                            {
+                                <div class="alert alert-info py-3 mb-0">
+                                    <i class="bi bi-check-circle me-1"></i>
+                                    Khách hàng <strong>@_selectedCustomer.Name</strong> hiện không có hóa đơn nào còn nợ!
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="mb-3 pb-2 border-bottom">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted small">Tổng công nợ cần thu:</span>
+                                        <span class="fw-bold text-danger">@_totalOutstandingDebt.ToString("N0") đ</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted small">Số tiền đang nhập:</span>
+                                        <span class="fw-bold text-success">@_model.Amount.ToString("N0") đ</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="text-muted small">Số hóa đơn chưa trả:</span>
+                                        <span class="fw-bold text-dark">@_outstandingInvoices.Count HĐ</span>
+                                    </div>
+                                </div>
+
+                                <h6 class="fw-bold small text-muted text-uppercase mb-2">Thứ tự cấn trừ (Từ cũ &rarr; mới):</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered align-middle mb-3">
+                                        <thead class="table-light small">
+                                            <tr>
+                                                <th>Số HĐ</th>
+                                                <th class="text-end">Dư nợ</th>
+                                                <th class="text-end">Cấn trừ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="small">
+                                            @foreach (var prev in _previewAllocations)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <span class="fw-semibold">@prev.InvoiceNumber</span>
+                                                        <div class="text-muted" style="font-size: 0.75rem;">@prev.InvoiceDate.ToString("dd/MM/yyyy")</div>
+                                                    </td>
+                                                    <td class="text-end">@prev.RemainingAmount.ToString("N0") đ</td>
+                                                    <td class="text-end fw-bold @(prev.AllocatedAmount > 0 ? "text-success" : "text-muted")">
+                                                        @prev.AllocatedAmount.ToString("N0") đ
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <!-- Action button -->
+                            <div class="d-grid gap-2 pt-2">
+                                <button type="submit" class="btn btn-success btn-lg" 
+                                        disabled="@(_isSubmitting || _model.CustomerId <= 0 || _model.Amount <= 0 || _outstandingInvoices.Count == 0)">
+                                    @if (_isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>Đang xử lý phân bổ...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle me-1"></i>
+                                        <span>Xác nhận Thu tiền &amp; Phân bổ</span>
+                                    }
+                                </button>
+                                <a href="payments" class="btn btn-outline-secondary">Hủy bỏ</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public int? CustomerId { get; set; }
+
+    private PaymentFormModel _model = new();
+    private Customer? _selectedCustomer;
+    private List<InvoiceOutstandingDto> _outstandingInvoices = new();
+    private List<PreviewAllocationItem> _previewAllocations = new();
+    private decimal _totalOutstandingDebt = 0;
+
+    private bool _isSubmitting = false;
+    private bool _isRecordedSuccess = false;
+    private List<PaymentAllocation>? _lastRecordedAllocations;
+    private List<FifoResultItem> _fifoResults = new();
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (CustomerId.HasValue && CustomerId.Value > 0)
+        {
+            await OnCustomerSelected(CustomerId.Value);
+        }
+    }
+
+    private async Task OnCustomerSelected(int customerId)
+    {
+        _model.CustomerId = customerId;
+        _errorMessage = null;
+
+        if (customerId > 0)
+        {
+            var customers = await ViewCustomersUseCase.ExecuteAsync();
+            _selectedCustomer = customers.FirstOrDefault(c => c.Id == customerId);
+
+            if (_selectedCustomer != null)
+            {
+                var outstanding = await InvoiceRepository.GetOutstandingInvoicesByCustomerAsync(customerId);
+                _outstandingInvoices = outstanding.OrderBy(i => i.InvoiceDate).ThenBy(i => i.Id).ToList();
+                _totalOutstandingDebt = _outstandingInvoices.Sum(i => i.RemainingAmount);
+                
+                CalculatePreview();
+            }
+        }
+        else
+        {
+            _selectedCustomer = null;
+            _outstandingInvoices.Clear();
+            _previewAllocations.Clear();
+            _totalOutstandingDebt = 0;
+        }
+    }
+
+    private void OnAmountChanged()
+    {
+        CalculatePreview();
+    }
+
+    private void CalculatePreview()
+    {
+        _previewAllocations.Clear();
+        if (_outstandingInvoices.Count == 0 || _model.Amount <= 0)
+        {
+            foreach (var inv in _outstandingInvoices)
+            {
+                _previewAllocations.Add(new PreviewAllocationItem
+                {
+                    InvoiceId = inv.Id,
+                    InvoiceNumber = inv.InvoiceNumber,
+                    InvoiceDate = inv.InvoiceDate,
+                    RemainingAmount = inv.RemainingAmount,
+                    AllocatedAmount = 0
+                });
+            }
+            return;
+        }
+
+        // Chạy thuật toán phân bổ FIFO qua IAllocatePaymentUseCase
+        var allocs = AllocatePaymentUseCase.Execute(0, _model.Amount, _outstandingInvoices);
+        var allocMap = allocs.ToDictionary(a => a.InvoiceId, a => a.AllocatedAmount);
+
+        foreach (var inv in _outstandingInvoices)
+        {
+            decimal alloc = allocMap.ContainsKey(inv.Id) ? allocMap[inv.Id] : 0;
+            _previewAllocations.Add(new PreviewAllocationItem
+            {
+                InvoiceId = inv.Id,
+                InvoiceNumber = inv.InvoiceNumber,
+                InvoiceDate = inv.InvoiceDate,
+                RemainingAmount = inv.RemainingAmount,
+                AllocatedAmount = alloc
+            });
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _errorMessage = null;
+
+        // Business Validation: Case 2 (Payment <= 0)
+        if (_model.Amount <= 0)
+        {
+            _errorMessage = "Số tiền thanh toán phải lớn hơn 0.";
+            return;
+        }
+
+        if (_model.CustomerId <= 0)
+        {
+            _errorMessage = "Vui lòng chọn khách hàng cần thu tiền.";
+            return;
+        }
+
+        if (_outstandingInvoices.Count == 0)
+        {
+            _errorMessage = "Khách hàng hiện không có hóa đơn nào còn nợ để thanh toán.";
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var payment = new Payment
+            {
+                CustomerId = _model.CustomerId,
+                PaymentNumber = _model.PaymentNumber,
+                PaymentDate = _model.PaymentDate,
+                Amount = _model.Amount,
+                Note = _model.Note
+            };
+
+            // Thực hiện ghi nhận và phân bổ FIFO thông qua RecordPaymentUseCase
+            int paymentId = await RecordPaymentUseCase.ExecuteAsync(payment);
+
+            // Thu thập kết quả phân bổ thực tế để hiển thị
+            var allocations = AllocatePaymentUseCase.Execute(paymentId, payment.Amount, _outstandingInvoices);
+            _lastRecordedAllocations = allocations;
+            var allocMap = allocations.ToDictionary(a => a.InvoiceId, a => a.AllocatedAmount);
+
+            _fifoResults.Clear();
+            foreach (var inv in _outstandingInvoices)
+            {
+                decimal alloc = allocMap.ContainsKey(inv.Id) ? allocMap[inv.Id] : 0;
+                _fifoResults.Add(new FifoResultItem
+                {
+                    InvoiceId = inv.Id,
+                    InvoiceNumber = inv.InvoiceNumber,
+                    InvoiceDate = inv.InvoiceDate,
+                    OriginalDebt = inv.RemainingAmount,
+                    AllocatedAmount = alloc,
+                    RemainingDebt = Math.Max(0, inv.RemainingAmount - alloc)
+                });
+            }
+
+            _isRecordedSuccess = true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Bắt lỗi nghiệp vụ: Case 3 (Allocation vượt Invoice debt), Case 4 (Allocation vượt Payment), v.v.
+            // Hiển thị thông báo thân thiện, tuyệt đối không lộ stack trace (K3.3)
+            _errorMessage = ex.Message;
+        }
+        catch (Exception)
+        {
+            _errorMessage = "Đã xảy ra lỗi trong quá trình ghi nhận phiếu thu. Vui lòng kiểm tra lại.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        _isRecordedSuccess = false;
+        _lastRecordedAllocations = null;
+        _fifoResults.Clear();
+        _model = new PaymentFormModel();
+        _selectedCustomer = null;
+        _outstandingInvoices.Clear();
+        _previewAllocations.Clear();
+        _totalOutstandingDebt = 0;
+        _errorMessage = null;
+    }
+
+    private class PreviewAllocationItem
+    {
+        public int InvoiceId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime InvoiceDate { get; set; }
+        public decimal RemainingAmount { get; set; }
+        public decimal AllocatedAmount { get; set; }
+    }
+
+    private class FifoResultItem
+    {
+        public int InvoiceId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public DateTime InvoiceDate { get; set; }
+        public decimal OriginalDebt { get; set; }
+        public decimal AllocatedAmount { get; set; }
+        public decimal RemainingDebt { get; set; }
+    }
+}

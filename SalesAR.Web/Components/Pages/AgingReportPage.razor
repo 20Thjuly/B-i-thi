@@ -1,0 +1,105 @@
+@page "/aging-report"
+@inject IGetAgingReportUseCase GetAgingReportUseCase
+
+<PageTitle>Báo cáo Tuổi nợ (Aging Report)</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-calendar-range text-primary me-2"></i>Báo cáo Phân tích Tuổi nợ (Aging Report)
+            </h1>
+            <p class="text-muted small mb-0">Phân loại công nợ phải thu theo các khoảng thời gian quá hạn (0–30, 31–60, 61–90, &gt;90 ngày)</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white">Tính đến ngày:</span>
+                <input type="date" class="form-control" @bind="_asOfDate" />
+            </div>
+            <button class="btn btn-primary btn-sm d-inline-flex align-items-center" @onclick="LoadReportAsync">
+                <i class="bi bi-arrow-clockwise me-1"></i> Tải lại
+            </button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted small mt-2">Đang tổng hợp dữ liệu tuổi nợ...</p>
+        </div>
+    }
+    else if (_summary != null)
+    {
+        <!-- Aging Overview KPI Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="0–30 ngày (Trong hạn)" 
+                                  Amount="@_summary.Total0To30" 
+                                  Icon="bi-shield-check" 
+                                  CardClass="border-start border-success border-4" 
+                                  Subtitle="Nợ mới phát sinh / trong kỳ" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="31–60 ngày" 
+                                  Amount="@_summary.Total31To60" 
+                                  Icon="bi-clock" 
+                                  CardClass="border-start border-warning border-4" 
+                                  Subtitle="Quá hạn từ 1 đến 2 tháng" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title="61–90 ngày" 
+                                  Amount="@_summary.Total61To90" 
+                                  Icon="bi-exclamation-triangle" 
+                                  CardClass="border-start border-warning border-4" 
+                                  Subtitle="Quá hạn từ 2 đến 3 tháng" />
+            </div>
+            <div class="col-12 col-sm-6 col-lg-3">
+                <DebtSummaryCard Title=">90 ngày (Nợ xấu)" 
+                                  Amount="@_summary.TotalOver90" 
+                                  Icon="bi-x-octagon-fill" 
+                                  CardClass="border-start border-danger border-4" 
+                                  Subtitle="Nguy cơ rủi ro cao" />
+            </div>
+        </div>
+
+        <!-- Aging Table Component (Reusable Component K3.1) -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="card-title fw-bold text-dark mb-0">
+                    <i class="bi bi-table text-primary me-2"></i>Bảng Chi tiết Tuổi nợ theo Khách hàng
+                </h5>
+                <span class="badge bg-light text-dark border">
+                    Số khách hàng có nợ: @_summary.Items.Count(i => i.TotalDebt > 0)
+                </span>
+            </div>
+            <div class="card-body p-0">
+                <AgingTable Summary="@_summary" ShowActionLink="true" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private DateTime _asOfDate = DateTime.Today;
+    private AgingReportSummary? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            _summary = await GetAgingReportUseCase.ExecuteAsync(_asOfDate);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

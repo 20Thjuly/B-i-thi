@@ -1,0 +1,357 @@
+@page "/products"
+@inject IViewProductsUseCase ViewProductsUseCase
+@inject IAddProductUseCase AddProductUseCase
+@inject IEditProductUseCase EditProductUseCase
+@inject IDeleteProductUseCase DeleteProductUseCase
+
+<PageTitle>Quản lý Hàng hóa / Sản phẩm</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-box-seam text-primary me-2"></i>Danh mục Hàng hóa & Sản phẩm
+            </h1>
+            <p class="text-muted small mb-0">Quản lý danh sách sản phẩm, đơn giá và số lượng tồn kho</p>
+        </div>
+        <button class="btn btn-primary d-inline-flex align-items-center" @onclick="OpenAddModal">
+            <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm mới
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-0" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@_statusMessage
+            <button type="button" class="btn-close" @onclick="() => _statusMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+        </div>
+    }
+
+    <!-- Search box -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-center">
+                <div class="col-12 col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" class="form-control border-start-0" placeholder="Tìm theo mã hoặc tên sản phẩm..." 
+                               @bind="_searchTerm" @bind:event="oninput" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            @if (_loading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Mã SP</th>
+                                <th>Tên sản phẩm</th>
+                                <th class="text-center">ĐVT</th>
+                                <th class="text-end">Đơn giá bán</th>
+                                <th class="text-center">Tồn kho</th>
+                                <th class="text-center">Trạng thái</th>
+                                <th class="text-center">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (FilteredProducts.Any())
+                            {
+                                @foreach (var p in FilteredProducts)
+                                {
+                                    <tr>
+                                        <td class="fw-bold">@p.Code</td>
+                                        <td class="fw-semibold text-dark">@p.Name</td>
+                                        <td class="text-center"><span class="badge bg-light text-dark border">@p.Unit</span></td>
+                                        <td class="text-end fw-bold text-primary">@p.Price.ToString("N0") đ</td>
+                                        <td class="text-center">
+                                            @if (p.StockQuantity <= 20)
+                                            {
+                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                                    @p.StockQuantity (Sắp hết)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fw-semibold text-success">@p.StockQuantity</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (p.IsActive)
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill">Đang bán</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1 rounded-pill">Ngừng bán</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary" @onclick="() => OpenEditModal(p)" title="Chỉnh sửa">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                @if (p.IsActive)
+                                                {
+                                                    <button class="btn btn-outline-danger" @onclick="() => ConfirmDeactivate(p.Id, p.Name)" title="Ngừng kinh doanh">
+                                                        <i class="bi bi-slash-circle"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">
+                                        Không tìm thấy sản phẩm nào phù hợp.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal Form Thêm / Sửa Sản phẩm (EditForm + DataAnnotations) -->
+@if (_showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-box-seam text-primary me-2"></i>@(_isEditing ? "Chỉnh sửa Sản phẩm" : "Thêm mới Sản phẩm")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <EditForm Model="_model" OnValidSubmit="HandleSaveProduct">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-5">
+                                <label class="form-label fw-semibold">Mã sản phẩm <span class="text-danger">*</span></label>
+                                <InputText class="form-control" @bind-Value="_model.Code" disabled="@_isEditing" placeholder="VD: SP011" />
+                                <ValidationMessage For="() => _model.Code" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12 col-md-7">
+                                <label class="form-label fw-semibold">Đơn vị tính <span class="text-danger">*</span></label>
+                                <InputText class="form-control" @bind-Value="_model.Unit" placeholder="VD: Thùng, Chai, Hộp..." />
+                                <ValidationMessage For="() => _model.Unit" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Tên sản phẩm <span class="text-danger">*</span></label>
+                                <InputText class="form-control" @bind-Value="_model.Name" placeholder="VD: Nước ngọt 7Up 330ml (Thùng 24 lon)" />
+                                <ValidationMessage For="() => _model.Name" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold">Đơn giá bán (VNĐ) <span class="text-danger">*</span></label>
+                                <InputNumber class="form-control" @bind-Value="_model.Price" />
+                                <ValidationMessage For="() => _model.Price" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold">Số lượng tồn kho <span class="text-danger">*</span></label>
+                                <InputNumber class="form-control" @bind-Value="_model.StockQuantity" />
+                                <ValidationMessage For="() => _model.StockQuantity" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check form-switch mt-2">
+                                    <InputCheckbox class="form-check-input" id="isActiveProductCheck" @bind-Value="_model.IsActive" />
+                                    <label class="form-check-label fw-semibold" for="isActiveProductCheck">Đang kinh doanh (Cho phép bán)</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="CloseModal">Hủy bỏ</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Lưu thông tin
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog IsVisible="_showConfirmDialog" 
+               Title="Xác nhận ngừng kinh doanh" 
+               Message="@($"Bạn có chắc muốn ngừng kinh doanh sản phẩm '{_deactivateName}'?")" 
+               OnConfirmation="HandleDeactivateConfirm" />
+
+@code {
+    private bool _loading = true;
+    private List<Product> _products = new();
+    private string _searchTerm = "";
+    private string? _statusMessage;
+    private string? _errorMessage;
+
+    private bool _showModal = false;
+    private bool _isEditing = false;
+    private ProductModel _model = new();
+
+    private bool _showConfirmDialog = false;
+    private int _deactivateId;
+    private string _deactivateName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        _loading = true;
+        try
+        {
+            _products = (await ViewProductsUseCase.ExecuteAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private IEnumerable<Product> FilteredProducts => _products.Where(p =>
+        string.IsNullOrWhiteSpace(_searchTerm) ||
+        p.Code.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+        p.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+
+    private void OpenAddModal()
+    {
+        _isEditing = false;
+        _model = new ProductModel
+        {
+            Code = $"SP{(_products.Count + 1):D3}",
+            Unit = "Thùng",
+            Price = 150000m,
+            StockQuantity = 100,
+            IsActive = true
+        };
+        _showModal = true;
+    }
+
+    private void OpenEditModal(Product product)
+    {
+        _isEditing = true;
+        _model = new ProductModel
+        {
+            Id = product.Id,
+            Code = product.Code,
+            Name = product.Name,
+            Unit = product.Unit,
+            Price = product.Price,
+            StockQuantity = product.StockQuantity,
+            IsActive = product.IsActive
+        };
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+    }
+
+    private async Task HandleSaveProduct()
+    {
+        try
+        {
+            _errorMessage = null;
+            if (_isEditing)
+            {
+                var prod = new Product
+                {
+                    Id = _model.Id,
+                    Code = _model.Code,
+                    Name = _model.Name,
+                    Unit = _model.Unit,
+                    Price = _model.Price,
+                    StockQuantity = _model.StockQuantity,
+                    IsActive = _model.IsActive
+                };
+                await EditProductUseCase.ExecuteAsync(prod);
+                _statusMessage = $"Đã cập nhật sản phẩm {_model.Name} thành công!";
+            }
+            else
+            {
+                var prod = new Product
+                {
+                    Code = _model.Code,
+                    Name = _model.Name,
+                    Unit = _model.Unit,
+                    Price = _model.Price,
+                    StockQuantity = _model.StockQuantity,
+                    IsActive = _model.IsActive
+                };
+                await AddProductUseCase.ExecuteAsync(prod);
+                _statusMessage = $"Đã thêm mới sản phẩm {_model.Name} thành công!";
+            }
+
+            _showModal = false;
+            await LoadProducts();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void ConfirmDeactivate(int id, string name)
+    {
+        _deactivateId = id;
+        _deactivateName = name;
+        _showConfirmDialog = true;
+    }
+
+    private async Task HandleDeactivateConfirm(bool confirmed)
+    {
+        _showConfirmDialog = false;
+        if (confirmed)
+        {
+            try
+            {
+                await DeleteProductUseCase.ExecuteAsync(_deactivateId);
+                _statusMessage = $"Đã ngừng kinh doanh sản phẩm '{_deactivateName}'.";
+                await LoadProducts();
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = ex.Message;
+            }
+        }
+    }
+}

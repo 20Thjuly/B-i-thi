@@ -1,0 +1,487 @@
+@page "/invoices/create"
+@inject ICreateInvoiceUseCase CreateInvoiceUseCase
+@inject IViewCustomersUseCase ViewCustomersUseCase
+@inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
+@inject IViewProductsUseCase ViewProductsUseCase
+@inject NavigationManager NavManager
+
+<PageTitle>Lập Hóa đơn Bán hàng</PageTitle>
+
+<div class="container-fluid px-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-file-earmark-plus text-primary me-2"></i>Lập Hóa đơn Bán hàng mới
+            </h1>
+            <p class="text-muted small mb-0">Tạo hóa đơn bán chịu và tự động kiểm tra hạn mức tín dụng khách hàng</p>
+        </div>
+        <a href="invoices" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách
+        </a>
+    </div>
+
+    <!-- Friendly Business Error Alert (K3.3) -->
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger d-flex align-items-center mb-4 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3 text-danger"></i>
+            <div>
+                <strong>Cảnh báo nghiệp vụ:</strong> @_errorMessage
+            </div>
+        </div>
+    }
+
+    <!-- Success Alert -->
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="alert alert-success d-flex align-items-center mb-4 shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill fs-4 me-3 text-success"></i>
+            <div>@_successMessage</div>
+        </div>
+    }
+
+    <EditForm Model="@_model" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <div class="row g-4">
+            <!-- Left Column: Form Details & Items -->
+            <div class="col-12 col-lg-8">
+                <!-- Card 1: Thông tin chung -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white py-3 border-0">
+                        <h5 class="card-title fw-bold text-dark mb-0">
+                            <i class="bi bi-info-circle text-primary me-2"></i>1. Thông tin Hóa đơn
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold">Khách hàng <span class="text-danger">*</span></label>
+                                <CustomerSelector SelectedCustomerId="@_model.CustomerId" 
+                                                  SelectedCustomerIdChanged="OnCustomerChanged" />
+                                <ValidationMessage For="() => _model.CustomerId" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold">Số hóa đơn <span class="text-danger">*</span></label>
+                                <InputText class="form-control" @bind-Value="_model.InvoiceNumber" placeholder="VD: HD-001" />
+                                <ValidationMessage For="() => _model.InvoiceNumber" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold">Ngày lập hóa đơn <span class="text-danger">*</span></label>
+                                <InputDate class="form-control" @bind-Value="_model.InvoiceDate" />
+                                <ValidationMessage For="() => _model.InvoiceDate" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold">Hạn thanh toán <span class="text-danger">*</span></label>
+                                <InputDate class="form-control" @bind-Value="_model.DueDate" />
+                                <ValidationMessage For="() => _model.DueDate" class="text-danger small" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Chi tiết hàng hóa (Invoice Lines) -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h5 class="card-title fw-bold text-dark mb-0">
+                            <i class="bi bi-cart-check text-primary me-2"></i>2. Chi tiết Sản phẩm bán
+                        </h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddNewLine">
+                            <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (_model.Lines.Count == 0)
+                        {
+                            <div class="text-center py-4 text-muted">
+                                <i class="bi bi-basket display-6 d-block mb-2 text-secondary"></i>
+                                Chưa có sản phẩm nào trong hóa đơn. Vui lòng bấm <strong>"Thêm sản phẩm"</strong>.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="min-width: 200px;">Sản phẩm</th>
+                                            <th style="width: 130px;" class="text-center">Số lượng</th>
+                                            <th style="width: 170px;" class="text-end">Đơn giá (VNĐ)</th>
+                                            <th style="width: 170px;" class="text-end">Thành tiền</th>
+                                            <th style="width: 50px;" class="text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (int i = 0; i < _model.Lines.Count; i++)
+                                        {
+                                            var idx = i;
+                                            var line = _model.Lines[idx];
+                                            <tr>
+                                                <td>
+                                                    <select class="form-select form-select-sm" 
+                                                            value="@line.ProductId" 
+                                                            @onchange="(e) => OnLineProductChanged(idx, e)">
+                                                        <option value="0">-- Chọn sản phẩm --</option>
+                                                        @foreach (var prod in _availableProducts)
+                                                        {
+                                                            <option value="@prod.Id">
+                                                                [@prod.Code] @prod.Name (Tồn: @prod.StockQuantity)
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    @if (line.ProductId <= 0)
+                                                    {
+                                                        <span class="text-danger small">Vui lòng chọn sản phẩm.</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm text-center" 
+                                                           min="1" @bind="line.Quantity" @bind:event="oninput" 
+                                                           @onchange="RecalculateTotals" />
+                                                    @if (line.Quantity <= 0)
+                                                    {
+                                                        <span class="text-danger small">SL &gt; 0</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm text-end" 
+                                                           min="0" step="1000" @bind="line.UnitPrice" @bind:event="oninput" 
+                                                           @onchange="RecalculateTotals" />
+                                                    @if (line.UnitPrice < 0)
+                                                    {
+                                                        <span class="text-danger small">Giá &ge; 0</span>
+                                                    }
+                                                </td>
+                                                <td class="text-end fw-bold text-dark">
+                                                    @line.Amount.ToString("N0") đ
+                                                </td>
+                                                <td class="text-center">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger border-0 p-1" 
+                                                            title="Xóa dòng" @onclick="() => RemoveLine(idx)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                        <tr>
+                                            <td colspan="3" class="text-end fw-bold">Tổng tiền hàng:</td>
+                                            <td class="text-end fw-bold text-primary fs-6">
+                                                @_model.TotalAmount.ToString("N0") đ
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Credit Limit Check & Actions -->
+            <div class="col-12 col-lg-4">
+                <!-- Card 3: Kiểm tra Hạn mức Tín dụng (Business Rule 1 - K1.3 / K3.3) -->
+                <div class="card shadow-sm border-0 mb-4 @(_isOverLimit ? "border-danger border-2" : "")">
+                    <div class="card-header @(_isOverLimit ? "bg-danger text-white" : "bg-light") py-3 border-0">
+                        <h5 class="card-title fw-bold mb-0 @(_isOverLimit ? "text-white" : "text-dark")">
+                            <i class="bi bi-shield-check me-2"></i>Kiểm soát Hạn mức Tín dụng
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (_selectedCustomer == null)
+                        {
+                            <div class="text-muted text-center py-4">
+                                <i class="bi bi-person-badge fs-2 d-block mb-2 text-secondary"></i>
+                                Vui lòng chọn khách hàng để kiểm tra hạn mức và công nợ hiện tại.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-3 pb-3 border-bottom">
+                                <span class="text-muted small d-block">Khách hàng được chọn:</span>
+                                <span class="fw-bold fs-6 text-dark">@_selectedCustomer.Name</span>
+                                <div class="text-muted small">Mã: @_selectedCustomer.Code | ĐT: @_selectedCustomer.Phone</div>
+                            </div>
+
+                            <ul class="list-unstyled mb-3">
+                                <li class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="text-muted">Hạn mức tín dụng:</span>
+                                    <span class="fw-bold text-dark">@_selectedCustomer.CreditLimit.ToString("N0") đ</span>
+                                </li>
+                                <li class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="text-muted">Công nợ hiện tại:</span>
+                                    <span class="fw-bold text-warning">@_currentDebt.ToString("N0") đ</span>
+                                </li>
+                                <li class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="text-muted">Hạn mức còn lại:</span>
+                                    <span class="fw-bold @(_remainingCredit < 0 ? "text-danger" : "text-success")">
+                                        @_remainingCredit.ToString("N0") đ
+                                    </span>
+                                </li>
+                                <li class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
+                                    <span class="fw-semibold">Tổng HĐ mới:</span>
+                                    <span class="fw-bold text-primary fs-6">+@_model.TotalAmount.ToString("N0") đ</span>
+                                </li>
+                                <li class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
+                                    <span class="fw-bold">Nợ sau khi tạo HĐ:</span>
+                                    <span class="fw-bold fs-5 @(_isOverLimit ? "text-danger" : "text-primary")">
+                                        @((_currentDebt + _model.TotalAmount).ToString("N0")) đ
+                                    </span>
+                                </li>
+                            </ul>
+
+                            <!-- Overlimit Warning Box (Yêu cầu chính xác của đề bài) -->
+                            @if (_isOverLimit)
+                            {
+                                <div class="alert alert-danger py-2 px-3 small mb-3">
+                                    <i class="bi bi-x-octagon-fill me-1"></i>
+                                    <strong>Không thể bán chịu: công nợ sau khi tạo hóa đơn sẽ vượt hạn mức tín dụng.</strong>
+                                    <div class="mt-1 text-muted" style="font-size: 0.8rem;">
+                                        Vượt: +@((_currentDebt + _model.TotalAmount - _selectedCustomer.CreditLimit).ToString("N0")) đ
+                                    </div>
+                                </div>
+                            }
+                            else if (_model.TotalAmount > 0)
+                            {
+                                <div class="alert alert-success py-2 px-3 small mb-3">
+                                    <i class="bi bi-check-circle-fill me-1"></i>
+                                    Đủ điều kiện bán chịu. Hạn mức còn lại sau HĐ: 
+                                    <strong>@((_remainingCredit - _model.TotalAmount).ToString("N0")) đ</strong>
+                                </div>
+                            }
+                        }
+
+                        <!-- Action Buttons -->
+                        <div class="d-grid gap-2 pt-2">
+                            <button type="submit" class="btn btn-primary btn-lg" 
+                                    disabled="@(_isSubmitting || _isOverLimit || _model.CustomerId <= 0 || _model.Lines.Count == 0)">
+                                @if (_isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Đang tạo hóa đơn...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check2-circle me-1"></i>
+                                    <span>Hoàn tất &amp; Tạo Hóa Đơn</span>
+                                }
+                            </button>
+
+                            <a href="invoices" class="btn btn-outline-secondary">Hủy bỏ</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private InvoiceFormModel _model = new();
+    private Customer? _selectedCustomer;
+    private decimal _currentDebt = 0;
+    private decimal _remainingCredit = 0;
+    private bool _isOverLimit = false;
+    private bool _isSubmitting = false;
+
+    private List<Product> _availableProducts = new();
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _availableProducts = (await ViewProductsUseCase.ExecuteAsync()).Where(p => p.IsActive).ToList();
+
+        // Thêm 1 dòng trống mặc định
+        AddNewLine();
+    }
+
+    private async Task OnCustomerChanged(int customerId)
+    {
+        _model.CustomerId = customerId;
+        _errorMessage = null;
+
+        if (customerId > 0)
+        {
+            var customers = await ViewCustomersUseCase.ExecuteAsync();
+            _selectedCustomer = customers.FirstOrDefault(c => c.Id == customerId);
+
+            if (_selectedCustomer != null)
+            {
+                var debtDto = await GetCustomerDebtUseCase.ExecuteAsync(customerId);
+                _currentDebt = debtDto?.CurrentDebt ?? 0;
+                _remainingCredit = _selectedCustomer.CreditLimit - _currentDebt;
+                
+                // Cập nhật ngày đáo hạn tự động dựa theo PaymentTermDays của khách hàng
+                _model.DueDate = _model.InvoiceDate.AddDays(_selectedCustomer.PaymentTermDays > 0 ? _selectedCustomer.PaymentTermDays : 30);
+            }
+        }
+        else
+        {
+            _selectedCustomer = null;
+            _currentDebt = 0;
+            _remainingCredit = 0;
+        }
+
+        CheckCreditLimit();
+    }
+
+    private void AddNewLine()
+    {
+        var firstProduct = _availableProducts.FirstOrDefault();
+        if (firstProduct != null)
+        {
+            _model.Lines.Add(new InvoiceLineFormModel
+            {
+                ProductId = firstProduct.Id,
+                ProductName = firstProduct.Name,
+                Quantity = 1,
+                UnitPrice = firstProduct.Price
+            });
+        }
+        else
+        {
+            _model.Lines.Add(new InvoiceLineFormModel
+            {
+                ProductId = 0,
+                Quantity = 1,
+                UnitPrice = 0
+            });
+        }
+        CheckCreditLimit();
+    }
+
+    private void RemoveLine(int index)
+    {
+        if (index >= 0 && index < _model.Lines.Count)
+        {
+            _model.Lines.RemoveAt(index);
+            CheckCreditLimit();
+        }
+    }
+
+    private void OnLineProductChanged(int index, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int productId))
+        {
+            var line = _model.Lines[index];
+            line.ProductId = productId;
+            var prod = _availableProducts.FirstOrDefault(p => p.Id == productId);
+            if (prod != null)
+            {
+                line.ProductName = prod.Name;
+                line.UnitPrice = prod.Price;
+            }
+            CheckCreditLimit();
+        }
+    }
+
+    private void RecalculateTotals()
+    {
+        CheckCreditLimit();
+    }
+
+    private void CheckCreditLimit()
+    {
+        if (_selectedCustomer == null)
+        {
+            _isOverLimit = false;
+            return;
+        }
+
+        decimal newInvoiceTotal = _model.TotalAmount;
+        _remainingCredit = _selectedCustomer.CreditLimit - _currentDebt;
+        _isOverLimit = (_currentDebt + newInvoiceTotal) > _selectedCustomer.CreditLimit;
+
+        if (_isOverLimit)
+        {
+            _errorMessage = "Không thể bán chịu: công nợ sau khi tạo hóa đơn sẽ vượt hạn mức tín dụng.";
+        }
+        else if (_errorMessage == "Không thể bán chịu: công nợ sau khi tạo hóa đơn sẽ vượt hạn mức tín dụng.")
+        {
+            _errorMessage = null;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _errorMessage = null;
+        _successMessage = null;
+
+        // Kiểm tra ràng buộc dòng sản phẩm
+        if (_model.Lines.Count == 0)
+        {
+            _errorMessage = "Hóa đơn phải có ít nhất một dòng sản phẩm chi tiết.";
+            return;
+        }
+
+        if (_model.Lines.Any(l => l.ProductId <= 0))
+        {
+            _errorMessage = "Vui lòng chọn sản phẩm hợp lệ cho tất cả các dòng.";
+            return;
+        }
+
+        if (_model.Lines.Any(l => l.Quantity <= 0))
+        {
+            _errorMessage = "Số lượng của mỗi sản phẩm phải lớn hơn 0.";
+            return;
+        }
+
+        // Kiểm tra Business Rule 1 - Hạn mức tín dụng
+        if (_selectedCustomer != null && (_currentDebt + _model.TotalAmount > _selectedCustomer.CreditLimit))
+        {
+            _errorMessage = "Không thể bán chịu: công nợ sau khi tạo hóa đơn sẽ vượt hạn mức tín dụng.";
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var invoice = new Invoice
+            {
+                CustomerId = _model.CustomerId,
+                InvoiceNumber = _model.InvoiceNumber,
+                InvoiceDate = _model.InvoiceDate,
+                DueDate = _model.DueDate,
+                TotalAmount = _model.TotalAmount,
+                Status = "Unpaid"
+            };
+
+            var lines = _model.Lines.Select(l => new InvoiceLine
+            {
+                ProductId = l.ProductId,
+                Quantity = l.Quantity,
+                UnitPrice = l.UnitPrice,
+                Amount = l.Quantity * l.UnitPrice
+            }).ToList();
+
+            int newInvoiceId = await CreateInvoiceUseCase.ExecuteAsync(invoice, lines);
+
+            _successMessage = $"Tạo hóa đơn {invoice.InvoiceNumber} thành công!";
+            await Task.Delay(1000);
+            NavManager.NavigateTo($"/invoices/{newInvoiceId}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Hiển thị thông báo nghiệp vụ thân thiện, KHÔNG hiển thị stack trace (K3.3)
+            _errorMessage = ex.Message.Contains("hạn mức tín dụng")
+                ? "Không thể bán chịu: công nợ sau khi tạo hóa đơn sẽ vượt hạn mức tín dụng."
+                : ex.Message;
+        }
+        catch (Exception)
+        {
+            // Lỗi hệ thống ngoài dự kiến - Thông báo thân thiện (K3.3)
+            _errorMessage = "Đã xảy ra lỗi trong quá trình tạo hóa đơn. Vui lòng kiểm tra lại thông tin và thử lại.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
