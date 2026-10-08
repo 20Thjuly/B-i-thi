@@ -26,39 +26,41 @@ public class CreateInvoiceUseCase : ICreateInvoiceUseCase
         if (invoice == null)
             throw new ArgumentNullException(nameof(invoice));
 
+        // RÀNG BUỘC: Hóa đơn phải có chi tiết
         if (lines == null || lines.Count == 0)
-            throw new InvalidOperationException("Hóa đơn phải có ít nhất 1 dòng chi tiết sản phẩm.");
+            throw new InvalidOperationException("Hóa đơn phải có ít nhất một dòng sản phẩm chi tiết.");
 
+        // BƯỚC 1: Validate Customer
         var customer = await _customerRepository.GetByIdAsync(invoice.CustomerId);
         if (customer == null)
             throw new InvalidOperationException($"Không tìm thấy khách hàng với mã ID: {invoice.CustomerId}.");
 
         if (!customer.IsActive)
-            throw new InvalidOperationException($"Khách hàng {customer.Name} đang ở trạng thái ngừng hoạt động.");
+            throw new InvalidOperationException($"Khách hàng '{customer.Name}' đang ở trạng thái ngừng hoạt động.");
 
-        // Tính tổng tiền hóa đơn từ các dòng chi tiết
+        // BƯỚC 2: Tính tổng tiền hóa đơn & Validate từng dòng sản phẩm
         decimal calculatedTotal = 0;
         foreach (var line in lines)
         {
             if (line.Quantity <= 0)
                 throw new InvalidOperationException("Số lượng sản phẩm phải lớn hơn 0.");
+
             if (line.UnitPrice < 0)
-                throw new InvalidOperationException("Đơn giá không được âm.");
+                throw new InvalidOperationException("Đơn giá sản phẩm không được âm.");
 
             line.Amount = line.Quantity * line.UnitPrice;
             calculatedTotal += line.Amount;
         }
         invoice.TotalAmount = calculatedTotal;
 
-        // LUẬT NGHIỆP VỤ 1 (K1.3): Chặn hóa đơn mới khi công nợ hiện tại + giá trị hóa đơn > hạn mức tín dụng
+        // BƯỚC 3: Tính công nợ hiện tại & Validate Credit Limit (BUSINESS RULE 1 - K1.3)
         decimal currentDebt = await _customerRepository.GetCurrentDebtAsync(invoice.CustomerId);
         if (currentDebt + invoice.TotalAmount > customer.CreditLimit)
         {
-            throw new InvalidOperationException(
-                $"[Vi phạm hạn mức tín dụng] Công nợ hiện tại ({currentDebt:N0} đ) + Giá trị đơn hàng ({invoice.TotalAmount:N0} đ) = {(currentDebt + invoice.TotalAmount):N0} đ vượt quá Hạn mức tín dụng cho phép ({customer.CreditLimit:N0} đ). Đơn hàng bị từ chối!");
+            throw new InvalidOperationException("Không thể tạo hóa đơn. Công nợ hiện tại và giá trị hóa đơn vượt quá hạn mức tín dụng của khách hàng.");
         }
 
-        // Thiết lập trạng thái ban đầu và ghi dữ liệu trong 1 Transaction (K2.2)
+        // BƯỚC 4, 5, 6: Tạo Invoice, InvoiceLine và Cập nhật Stock trong cùng 1 Transaction (K2.2)
         invoice.Status = "Unpaid";
         return await _invoiceRepository.CreateInvoiceWithLinesAsync(invoice, lines);
     }

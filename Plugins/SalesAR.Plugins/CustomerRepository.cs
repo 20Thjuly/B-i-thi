@@ -3,6 +3,7 @@ namespace SalesAR.Plugins.DataStore.SQL;
 using System.Data;
 using Dapper;
 using SalesAR.CoreBusiness.Models;
+using SalesAR.UseCases.Models;
 using SalesAR.UseCases.PluginInterfaces;
 
 public class CustomerRepository : ICustomerRepository
@@ -61,6 +62,13 @@ public class CustomerRepository : ICustomerRepository
         await connection.ExecuteAsync(sql, customer);
     }
 
+    public async Task DeleteAsync(int id)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        const string sql = "UPDATE dbo.Customers SET IsActive = 0 WHERE Id = @Id;";
+        await connection.ExecuteAsync(sql, new { Id = id });
+    }
+
     public async Task<decimal> GetCurrentDebtAsync(int customerId)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -72,7 +80,36 @@ public class CustomerRepository : ICustomerRepository
                 FROM dbo.PaymentAllocations
                 GROUP BY InvoiceId
             ) pa ON i.Id = pa.InvoiceId
-            WHERE i.CustomerId = @CustomerId AND i.Status <> 'Paid';";
+            WHERE i.CustomerId = @CustomerId AND i.Status <> 'Paid' AND i.Status <> 'Cancelled';";
         return await connection.ExecuteScalarAsync<decimal>(sql, new { CustomerId = customerId });
+    }
+
+    public async Task<CustomerDebtDto?> GetCustomerDebtDetailsAsync(int customerId)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        const string sql = @"
+            SELECT 
+                c.Id AS CustomerId,
+                c.Code AS CustomerCode,
+                c.Name AS CustomerName,
+                c.CreditLimit AS CreditLimit,
+                ISNULL(inv.TotalInvoiced, 0) AS TotalInvoiced,
+                ISNULL(pmt.TotalPaid, 0) AS TotalPaid,
+                (ISNULL(inv.TotalInvoiced, 0) - ISNULL(pmt.TotalPaid, 0)) AS CurrentDebt
+            FROM dbo.Customers c
+            LEFT JOIN (
+                SELECT CustomerId, SUM(TotalAmount) AS TotalInvoiced
+                FROM dbo.Invoices
+                WHERE Status <> 'Cancelled'
+                GROUP BY CustomerId
+            ) inv ON c.Id = inv.CustomerId
+            LEFT JOIN (
+                SELECT CustomerId, SUM(Amount) AS TotalPaid
+                FROM dbo.Payments
+                GROUP BY CustomerId
+            ) pmt ON c.Id = pmt.CustomerId
+            WHERE c.Id = @CustomerId;";
+
+        return await connection.QuerySingleOrDefaultAsync<CustomerDebtDto>(sql, new { CustomerId = customerId });
     }
 }

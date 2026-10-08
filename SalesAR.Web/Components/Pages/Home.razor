@@ -1,15 +1,15 @@
 @page "/"
 @inject IViewCustomersUseCase ViewCustomersUseCase
-@inject IAgingReportRepository AgingReportRepository
+@inject IGetAgingReportUseCase GetAgingReportUseCase
 
-<PageTitle>Bán hàng & Công nợ Khách hàng - Đợt 1</PageTitle>
+<PageTitle>Bán hàng & Công nợ Khách hàng - Đợt 2</PageTitle>
 
 <div class="container py-4">
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body p-4 bg-light rounded-3">
             <h1 class="h3 fw-bold text-primary mb-2">Đồ án: 18. Bán hàng & Công nợ Khách hàng – Sales & Accounts Receivable</h1>
             <p class="text-muted mb-0">
-                Kiểm tra kiến trúc Clean Architecture 4 tầng, Dependency Injection Scoped và Kết nối CSDL SQL Server (Đợt 1).
+                Kiểm tra tầng Use Case, Business Rules (Hạn mức & FIFO), Transaction và Báo cáo tuổi nợ (Đợt 2).
             </p>
         </div>
     </div>
@@ -18,24 +18,24 @@
     {
         <div class="d-flex align-items-center text-muted">
             <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-            <span>Đang kiểm tra kết nối CSDL và Dependency Injection...</span>
+            <span>Đang tải dữ liệu từ CSDL qua Use Cases...</span>
         </div>
     }
     else if (!string.IsNullOrEmpty(_errorMessage))
     {
         <div class="alert alert-danger" role="alert">
-            <h5 class="alert-heading fw-bold">Lỗi kết nối cơ sở dữ liệu!</h5>
+            <h5 class="alert-heading fw-bold">Lỗi:</h5>
             <p class="mb-0">@_errorMessage</p>
         </div>
     }
     else
     {
         <div class="row g-4">
-            <div class="col-md-6">
+            <div class="col-md-5">
                 <div class="card h-100 shadow-sm border-0">
                     <div class="card-header bg-white py-3">
                         <h5 class="card-title mb-0 fw-semibold text-secondary">
-                            <i class="bi bi-people-fill me-2"></i>Dữ liệu Khách hàng (ICustomerRepository via DI)
+                            <i class="bi bi-people-fill me-2"></i>Khách hàng (IViewCustomersUseCase)
                         </h5>
                     </div>
                     <div class="card-body p-0">
@@ -44,7 +44,7 @@
                                 <tr>
                                     <th>Mã KH</th>
                                     <th>Tên khách hàng</th>
-                                    <th class="text-end">Hạn mức nợ</th>
+                                    <th class="text-end">Hạn mức</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -62,11 +62,11 @@
                 </div>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-7">
                 <div class="card h-100 shadow-sm border-0">
                     <div class="card-header bg-white py-3">
                         <h5 class="card-title mb-0 fw-semibold text-secondary">
-                            <i class="bi bi-graph-up me-2"></i>Báo cáo Tuổi nợ (IAgingReportRepository via DI)
+                            <i class="bi bi-graph-up me-2"></i>Báo cáo Tuổi nợ (IGetAgingReportUseCase)
                         </h5>
                     </div>
                     <div class="card-body p-0">
@@ -75,16 +75,33 @@
                                 <tr>
                                     <th>Mã KH</th>
                                     <th class="text-end">Tổng nợ</th>
-                                    <th class="text-end">Nợ >90 ngày</th>
+                                    <th class="text-end">0-30d</th>
+                                    <th class="text-end">31-60d</th>
+                                    <th class="text-end">61-90d</th>
+                                    <th class="text-end">>90d</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var r in _agingReports)
+                                @if (_agingSummary != null)
                                 {
-                                    <tr>
-                                        <td class="fw-bold">@r.CustomerCode</td>
-                                        <td class="text-end text-danger fw-semibold">@r.CurrentDebt.ToString("N0") đ</td>
-                                        <td class="text-end text-danger">@r.BucketOver90.ToString("N0") đ</td>
+                                    @foreach (var r in _agingSummary.Items)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">@r.CustomerCode</td>
+                                            <td class="text-end text-danger fw-semibold">@r.TotalDebt.ToString("N0") đ</td>
+                                            <td class="text-end">@r.Bucket0To30.ToString("N0") đ</td>
+                                            <td class="text-end">@r.Bucket31To60.ToString("N0") đ</td>
+                                            <td class="text-end">@r.Bucket61To90.ToString("N0") đ</td>
+                                            <td class="text-end text-danger">@r.BucketOver90.ToString("N0") đ</td>
+                                        </tr>
+                                    }
+                                    <tr class="table-secondary fw-bold">
+                                        <td>TỔNG CỘNG</td>
+                                        <td class="text-end text-danger">@_agingSummary.TotalDebt.ToString("N0") đ</td>
+                                        <td class="text-end">@_agingSummary.Total0To30.ToString("N0") đ</td>
+                                        <td class="text-end">@_agingSummary.Total31To60.ToString("N0") đ</td>
+                                        <td class="text-end">@_agingSummary.Total61To90.ToString("N0") đ</td>
+                                        <td class="text-end text-danger">@_agingSummary.TotalOver90.ToString("N0") đ</td>
                                     </tr>
                                 }
                             </tbody>
@@ -100,14 +117,14 @@
     private bool _loading = true;
     private string? _errorMessage;
     private IEnumerable<Customer> _customers = Enumerable.Empty<Customer>();
-    private IEnumerable<AgingReportItem> _agingReports = Enumerable.Empty<AgingReportItem>();
+    private AgingReportSummary? _agingSummary;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _customers = await ViewCustomersUseCase.ExecuteAsync();
-            _agingReports = await AgingReportRepository.GetAgingReportAsync(DateTime.Now);
+            _agingSummary = await GetAgingReportUseCase.ExecuteAsync(DateTime.Now);
         }
         catch (Exception ex)
         {

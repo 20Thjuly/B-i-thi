@@ -3,6 +3,7 @@ namespace SalesAR.Plugins.DataStore.SQL;
 using System.Data;
 using Dapper;
 using SalesAR.CoreBusiness.Models;
+using SalesAR.UseCases.Models;
 using SalesAR.UseCases.PluginInterfaces;
 
 public class InvoiceRepository : IInvoiceRepository
@@ -48,12 +49,38 @@ public class InvoiceRepository : IInvoiceRepository
         const string sql = @"
             SELECT Id, InvoiceNumber, CustomerId, InvoiceDate, DueDate, TotalAmount, Status 
             FROM dbo.Invoices 
-            WHERE CustomerId = @CustomerId AND Status <> 'Paid'
+            WHERE CustomerId = @CustomerId AND Status <> 'Paid' AND Status <> 'Cancelled'
             ORDER BY InvoiceDate ASC, Id ASC;";
         return await connection.QueryAsync<Invoice>(sql, new { CustomerId = customerId });
     }
 
-    // Luồng giao dịch chính: Cặp header-line ghi trong 1 transaction (Rubric K2.2 & K2.3)
+    public async Task<IEnumerable<InvoiceOutstandingDto>> GetOutstandingInvoicesByCustomerAsync(int customerId)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        const string sql = @"
+            SELECT 
+                i.Id,
+                i.InvoiceNumber,
+                i.CustomerId,
+                i.InvoiceDate,
+                i.DueDate,
+                i.TotalAmount,
+                ISNULL(pa.Allocated, 0) AS PaidAmount,
+                i.Status
+            FROM dbo.Invoices i
+            LEFT JOIN (
+                SELECT InvoiceId, SUM(AllocatedAmount) AS Allocated
+                FROM dbo.PaymentAllocations
+                GROUP BY InvoiceId
+            ) pa ON i.Id = pa.InvoiceId
+            WHERE i.CustomerId = @CustomerId AND i.Status <> 'Paid' AND i.Status <> 'Cancelled'
+            ORDER BY i.InvoiceDate ASC, i.Id ASC;";
+        return await connection.QueryAsync<InvoiceOutstandingDto>(sql, new { CustomerId = customerId });
+    }
+
+    // SECTION 4: CREATE INVOICE TRANSACTION (K2.2 & K2.3)
+    // Luồng: Begin Transaction -> Tạo Invoice -> Tạo InvoiceLine -> Cập nhật tồn kho (Stock) -> Commit.
+    // Lỗi bất kỳ bước nào: Rollback toàn bộ. Không bao giờ để Invoice tồn tại mà thiếu InvoiceLine.
     public async Task<int> CreateInvoiceWithLinesAsync(Invoice invoice, IEnumerable<InvoiceLine> lines)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -73,10 +100,22 @@ public class InvoiceRepository : IInvoiceRepository
                 INSERT INTO dbo.InvoiceLines (InvoiceId, ProductId, Quantity, UnitPrice, Amount)
                 VALUES (@InvoiceId, @ProductId, @Quantity, @UnitPrice, @Amount);";
 
+            const string updateStockSql = @"
+                UPDATE dbo.Products
+                SET StockQuantity = StockQuantity - @Quantity
+                WHERE Id = @ProductId AND StockQuantity >= @Quantity;";
+
             foreach (var line in lines)
             {
                 line.InvoiceId = invoiceId;
                 await connection.ExecuteAsync(insertLineSql, line, transaction);
+
+                // Giảm tồn kho và kiểm tra tồn kho đủ
+                int rowsAffected = await connection.ExecuteAsync(updateStockSql, new { Quantity = line.Quantity, ProductId = line.ProductId }, transaction);
+                if (rowsAffected == 0)
+                {
+                    throw new InvalidOperationException($"Sản phẩm (ID: {line.ProductId}) không đủ số lượng tồn kho để xuất hóa đơn.");
+                }
             }
 
             transaction.Commit();

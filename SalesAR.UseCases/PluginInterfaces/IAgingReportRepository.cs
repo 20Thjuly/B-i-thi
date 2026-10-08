@@ -4,5 +4,5 @@ using SalesAR.UseCases.Models;
 
 public interface IAgingReportRepository
 {
-    Task<IEnumerable<AgingReportItem>> GetAgingReportAsync(DateTime asOfDate);
+    Task<AgingReportSummary> GetAgingReportAsync(DateTime asOfDate);
 }

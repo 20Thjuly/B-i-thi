@@ -14,7 +14,7 @@ public class AgingReportRepository : IAgingReportRepository
         _connectionFactory = connectionFactory;
     }
 
-    public async Task<IEnumerable<AgingReportItem>> GetAgingReportAsync(DateTime asOfDate)
+    public async Task<AgingReportSummary> GetAgingReportAsync(DateTime asOfDate)
     {
         using var connection = _connectionFactory.CreateConnection();
         const string sql = @"
@@ -23,7 +23,7 @@ public class AgingReportRepository : IAgingReportRepository
                 c.Code AS CustomerCode,
                 c.Name AS CustomerName,
                 c.CreditLimit,
-                ISNULL(SUM(inv.RemainingAmount), 0) AS CurrentDebt,
+                ISNULL(SUM(inv.RemainingAmount), 0) AS TotalDebt,
                 ISNULL(SUM(CASE WHEN inv.DaysOverdue <= 30 THEN inv.RemainingAmount ELSE 0 END), 0) AS Bucket0To30,
                 ISNULL(SUM(CASE WHEN inv.DaysOverdue BETWEEN 31 AND 60 THEN inv.RemainingAmount ELSE 0 END), 0) AS Bucket31To60,
                 ISNULL(SUM(CASE WHEN inv.DaysOverdue BETWEEN 61 AND 90 THEN inv.RemainingAmount ELSE 0 END), 0) AS Bucket61To90,
@@ -41,11 +41,15 @@ public class AgingReportRepository : IAgingReportRepository
                     FROM dbo.PaymentAllocations
                     GROUP BY InvoiceId
                 ) pa ON i.Id = pa.InvoiceId
-                WHERE i.Status <> 'Paid'
+                WHERE i.Status <> 'Paid' AND i.Status <> 'Cancelled'
             ) inv ON c.Id = inv.CustomerId AND inv.RemainingAmount > 0
             GROUP BY c.Id, c.Code, c.Name, c.CreditLimit
             ORDER BY c.Code ASC;";
 
-        return await connection.QueryAsync<AgingReportItem>(sql, new { AsOfDate = asOfDate });
+        var items = (await connection.QueryAsync<AgingReportItem>(sql, new { AsOfDate = asOfDate })).ToList();
+        return new AgingReportSummary
+        {
+            Items = items
+        };
     }
 }

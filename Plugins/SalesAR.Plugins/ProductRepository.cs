@@ -59,4 +59,11 @@ public class ProductRepository : IProductRepository
             WHERE Id = @Id;";
         await connection.ExecuteAsync(sql, product);
     }
+
+    public async Task DeleteAsync(int id)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        const string sql = "UPDATE dbo.Products SET IsActive = 0 WHERE Id = @Id;";
+        await connection.ExecuteAsync(sql, new { Id = id });
+    }
 }

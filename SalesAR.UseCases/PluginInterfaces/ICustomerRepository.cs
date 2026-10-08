@@ -1,6 +1,7 @@
 namespace SalesAR.UseCases.PluginInterfaces;
 
 using SalesAR.CoreBusiness.Models;
+using SalesAR.UseCases.Models;
 
 public interface ICustomerRepository
 {
@@ -9,5 +10,7 @@ public interface ICustomerRepository
     Task<Customer?> GetByCodeAsync(string code);
     Task<int> AddAsync(Customer customer);
     Task UpdateAsync(Customer customer);
+    Task DeleteAsync(int id);
     Task<decimal> GetCurrentDebtAsync(int customerId);
+    Task<CustomerDebtDto?> GetCustomerDebtDetailsAsync(int customerId);
 }
