@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- SCRIPT 03: CREATE RELATIONSHIPS & INDEXES
 -- Đồ án: 18. Bán hàng & Công nợ Khách hàng - Sales & Accounts Receivable
 -- Hệ quản trị CSDL: Microsoft SQL Server

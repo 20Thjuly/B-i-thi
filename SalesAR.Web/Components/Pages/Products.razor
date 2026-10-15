@@ -88,23 +88,23 @@
                                         <td class="text-center">
                                             @if (p.StockQuantity <= 20)
                                             {
-                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                                <span class="badge badge-soft-danger px-2 py-1">
                                                     @p.StockQuantity (Sắp hết)
                                                 </span>
                                             }
                                             else
                                             {
-                                                <span class="fw-semibold text-success">@p.StockQuantity</span>
+                                                <span class="fw-semibold text-success tabular-nums">@p.StockQuantity</span>
                                             }
                                         </td>
                                         <td class="text-center">
                                             @if (p.IsActive)
                                             {
-                                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 rounded-pill">Đang bán</span>
+                                                <span class="badge badge-soft-success rounded-pill px-2.5 py-1">Đang bán</span>
                                             }
                                             else
                                             {
-                                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1 rounded-pill">Ngừng bán</span>
+                                                <span class="badge badge-soft-secondary rounded-pill px-2.5 py-1">Ngừng bán</span>
                                             }
                                         </td>
                                         <td class="text-center">

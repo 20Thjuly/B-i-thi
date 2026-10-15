@@ -103,7 +103,7 @@
                                             @inv.DueDate.ToString("dd/MM/yyyy")
                                             @if (inv.DueDate < DateTime.Today && inv.Status != "Paid")
                                             {
-                                                <span class="badge bg-danger ms-1" style="font-size: 0.7rem;">Quá hạn</span>
+                                                <span class="badge badge-soft-danger ms-1" style="font-size: 0.7rem;">Quá hạn</span>
                                             }
                                         </td>
                                         <td class="text-end fw-bold text-dark">@inv.TotalAmount.ToString("N0") đ</td>

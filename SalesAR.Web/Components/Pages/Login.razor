@@ -9,18 +9,23 @@
 <div class="container py-5">
     <div class="row justify-content-center">
         <div class="col-12 col-md-8 col-lg-5">
+            <!-- Modern Login Card -->
             <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
-                <div class="card-header bg-primary text-white text-center py-4">
-                    <i class="bi bi-shield-lock fs-1 d-block mb-2"></i>
-                    <h3 class="fw-bold mb-1">Đăng nhập Hệ thống</h3>
-                    <p class="small text-white-50 mb-0">Hệ thống Quản lý Bán hàng & Công nợ Khách hàng</p>
+                <!-- Header with brand gradient -->
+                <div class="card-header text-center py-4 text-white" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #4338ca 100%);">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-3 mb-2" 
+                         style="width: 48px; height: 48px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px);">
+                        <i class="bi bi-shield-lock-fill fs-3 text-white"></i>
+                    </div>
+                    <h3 class="fw-bold mb-1 fs-4" style="letter-spacing: -0.01em;">Đăng nhập SalesAR</h3>
+                    <p class="small text-white-50 mb-0">Hệ thống Quản lý Bán hàng &amp; Công nợ Khách hàng</p>
                 </div>
 
-                <div class="card-body p-4 p-md-5">
+                <div class="card-body p-4 p-md-5 bg-white">
                     @if (!string.IsNullOrEmpty(_errorMessage))
                     {
                         <div class="alert alert-danger d-flex align-items-center mb-4 py-2" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill fs-5 me-2 text-danger"></i>
+                            <i class="bi bi-exclamation-triangle-fill fs-5 me-2 text-danger flex-shrink-0"></i>
                             <div>@_errorMessage</div>
                         </div>
                     }
@@ -31,8 +36,10 @@
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Tên đăng nhập</label>
                             <div class="input-group">
-                                <span class="input-group-text bg-white"><i class="bi bi-person text-muted"></i></span>
-                                <InputText class="form-control" @bind-Value="_loginModel.Username" placeholder="Nhập tên đăng nhập..." />
+                                <span class="input-group-text bg-light text-muted border-end-0">
+                                    <i class="bi bi-person"></i>
+                                </span>
+                                <InputText class="form-control border-start-0 ps-1" @bind-Value="_loginModel.Username" placeholder="Nhập tên đăng nhập..." />
                             </div>
                             <ValidationMessage For="() => _loginModel.Username" class="text-danger small" />
                         </div>
@@ -40,23 +47,25 @@
                         <div class="mb-4">
                             <label class="form-label fw-semibold">Mật khẩu</label>
                             <div class="input-group">
-                                <span class="input-group-text bg-white"><i class="bi bi-key text-muted"></i></span>
-                                <input type="password" class="form-control" @bind="_loginModel.Password" placeholder="Nhập mật khẩu..." />
+                                <span class="input-group-text bg-light text-muted border-end-0">
+                                    <i class="bi bi-key"></i>
+                                </span>
+                                <input type="password" class="form-control border-start-0 ps-1" @bind="_loginModel.Password" placeholder="Nhập mật khẩu..." />
                             </div>
                             <ValidationMessage For="() => _loginModel.Password" class="text-danger small" />
                         </div>
 
                         <div class="d-grid mb-4">
-                            <button type="submit" class="btn btn-primary btn-lg" disabled="@_isSubmitting">
+                            <button type="submit" class="btn btn-primary btn-lg shadow-sm" disabled="@_isSubmitting">
                                 @if (_isSubmitting)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                    <span>Đang xác thực...</span>
+                                    <span>Đang xác thực bảo mật...</span>
                                 }
                                 else
                                 {
                                     <i class="bi bi-box-arrow-in-right me-1"></i>
-                                    <span>Đăng nhập</span>
+                                    <span>Đăng nhập hệ thống</span>
                                 }
                             </button>
                         </div>
@@ -64,22 +73,44 @@
 
                     <!-- Phím tắt Demo cho Giảng viên / Ban Giám Khảo kiểm thử -->
                     <div class="border-top pt-3">
-                        <div class="small fw-semibold text-muted text-uppercase mb-2 text-center">Tài khoản mẫu để kiểm thử Đợt 4:</div>
+                        <div class="small fw-bold text-muted text-uppercase mb-2 text-center" style="font-size: 0.72rem; letter-spacing: 0.05em;">
+                            Tài khoản mẫu để kiểm thử &amp; chấm điểm:
+                        </div>
                         <div class="d-flex flex-column gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-danger text-start d-flex justify-content-between align-items-center"
-                                    @onclick='() => SetDemoUser("admin", "Admin@123")'>
-                                <span><i class="bi bi-person-gear me-1"></i><strong>ADMIN</strong> (Toàn quyền)</span>
-                                <span class="badge bg-danger">admin / Admin@123</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger text-start d-flex justify-content-between align-items-center p-2 rounded-3"
+                                    @onclick='() => SetDemoUser("admin", "Admin@123")' title="Click để tự động điền tài khoản ADMIN">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-person-gear fs-5 text-danger"></i>
+                                    <div>
+                                        <div class="fw-bold" style="font-size: 0.8rem;">ADMIN</div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">Toàn quyền hệ thống &amp; quản trị</div>
+                                    </div>
+                                </div>
+                                <span class="badge badge-soft-danger font-monospace">admin / Admin@123</span>
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-primary text-start d-flex justify-content-between align-items-center"
-                                    @onclick='() => SetDemoUser("sales", "Sales@123")'>
-                                <span><i class="bi bi-cart me-1"></i><strong>SALES</strong> (Bán hàng, Lập HĐ)</span>
-                                <span class="badge bg-primary">sales / Sales@123</span>
+
+                            <button type="button" class="btn btn-sm btn-outline-primary text-start d-flex justify-content-between align-items-center p-2 rounded-3"
+                                    @onclick='() => SetDemoUser("sales", "Sales@123")' title="Click để tự động điền tài khoản SALES">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-cart fs-5 text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold" style="font-size: 0.8rem;">SALES</div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">Quản lý KH, Sản phẩm &amp; Lập HĐ</div>
+                                    </div>
+                                </div>
+                                <span class="badge badge-soft-primary font-monospace">sales / Sales@123</span>
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-success text-start d-flex justify-content-between align-items-center"
-                                    @onclick='() => SetDemoUser("accountant", "Acc@123")'>
-                                <span><i class="bi bi-calculator me-1"></i><strong>ACCOUNTANT</strong> (Thu tiền, Aging)</span>
-                                <span class="badge bg-success">accountant / Acc@123</span>
+
+                            <button type="button" class="btn btn-sm btn-outline-success text-start d-flex justify-content-between align-items-center p-2 rounded-3"
+                                    @onclick='() => SetDemoUser("accountant", "Acc@123")' title="Click để tự động điền tài khoản ACCOUNTANT">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-calculator fs-5 text-success"></i>
+                                    <div>
+                                        <div class="fw-bold" style="font-size: 0.8rem;">ACCOUNTANT</div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">Thu tiền (FIFO) &amp; Xuất Aging Report</div>
+                                    </div>
+                                </div>
+                                <span class="badge badge-soft-success font-monospace">accountant / Acc@123</span>
                             </button>
                         </div>
                     </div>

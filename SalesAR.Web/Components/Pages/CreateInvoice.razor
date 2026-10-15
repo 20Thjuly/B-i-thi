@@ -210,28 +210,45 @@
                                 <div class="text-muted small">Mã: @_selectedCustomer.Code | ĐT: @_selectedCustomer.Phone</div>
                             </div>
 
+                            <!-- Visual Credit Health Progress Bar -->
+                            <div class="mb-3 p-2.5 bg-light rounded-3 border">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small fw-semibold text-muted" style="font-size: 0.75rem;">Sử dụng hạn mức:</span>
+                                    <span class="small fw-bold tabular-nums @(_isOverLimit ? "text-danger" : "text-dark")" style="font-size: 0.75rem;">
+                                        @GetUsagePercent()% @(_isOverLimit ? "(Vượt trần!)" : "")
+                                    </span>
+                                </div>
+                                <div class="credit-bar-wrapper" style="height: 8px;">
+                                    <div class="credit-bar-fill @GetBarColor()" style="width: @(GetUsagePercent())%"></div>
+                                </div>
+                                <div class="d-flex justify-content-between small text-muted mt-1" style="font-size: 0.7rem;">
+                                    <span>Đã nợ: @_currentDebt.ToString("N0") đ</span>
+                                    <span>Trần: @_selectedCustomer.CreditLimit.ToString("N0") đ</span>
+                                </div>
+                            </div>
+
                             <ul class="list-unstyled mb-3">
                                 <li class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="text-muted">Hạn mức tín dụng:</span>
-                                    <span class="fw-bold text-dark">@_selectedCustomer.CreditLimit.ToString("N0") đ</span>
+                                    <span class="text-muted small">Hạn mức tín dụng:</span>
+                                    <span class="fw-bold text-dark tabular-nums">@_selectedCustomer.CreditLimit.ToString("N0") đ</span>
                                 </li>
                                 <li class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="text-muted">Công nợ hiện tại:</span>
-                                    <span class="fw-bold text-warning">@_currentDebt.ToString("N0") đ</span>
+                                    <span class="text-muted small">Công nợ hiện tại:</span>
+                                    <span class="fw-bold text-warning tabular-nums">@_currentDebt.ToString("N0") đ</span>
                                 </li>
                                 <li class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="text-muted">Hạn mức còn lại:</span>
-                                    <span class="fw-bold @(_remainingCredit < 0 ? "text-danger" : "text-success")">
+                                    <span class="text-muted small">Hạn mức còn lại:</span>
+                                    <span class="fw-bold tabular-nums @(_remainingCredit < 0 ? "text-danger" : "text-success")">
                                         @_remainingCredit.ToString("N0") đ
                                     </span>
                                 </li>
                                 <li class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
-                                    <span class="fw-semibold">Tổng HĐ mới:</span>
-                                    <span class="fw-bold text-primary fs-6">+@_model.TotalAmount.ToString("N0") đ</span>
+                                    <span class="fw-semibold small">Tổng HĐ mới:</span>
+                                    <span class="fw-bold text-primary fs-6 tabular-nums">+@_model.TotalAmount.ToString("N0") đ</span>
                                 </li>
                                 <li class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
-                                    <span class="fw-bold">Nợ sau khi tạo HĐ:</span>
-                                    <span class="fw-bold fs-5 @(_isOverLimit ? "text-danger" : "text-primary")">
+                                    <span class="fw-bold small">Nợ sau khi tạo HĐ:</span>
+                                    <span class="fw-bold fs-5 tabular-nums @(_isOverLimit ? "text-danger" : "text-primary")">
                                         @((_currentDebt + _model.TotalAmount).ToString("N0")) đ
                                     </span>
                                 </li>
@@ -294,6 +311,19 @@
     private List<Product> _availableProducts = new();
     private string? _errorMessage;
     private string? _successMessage;
+
+    private int GetUsagePercent()
+    {
+        if (_selectedCustomer == null || _selectedCustomer.CreditLimit <= 0) return 0;
+        var newTotal = _currentDebt + _model.TotalAmount;
+        return (int)Math.Min(100, Math.Max(0, (newTotal / _selectedCustomer.CreditLimit * 100)));
+    }
+
+    private string GetBarColor()
+    {
+        if (_isOverLimit) return "bg-danger";
+        return GetUsagePercent() >= 85 ? "bg-warning" : "bg-primary";
+    }
 
     protected override async Task OnInitializedAsync()
     {

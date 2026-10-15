@@ -76,29 +76,29 @@
                                         <td class="text-center">
                                             @if (u.RoleName == "ADMIN")
                                             {
-                                                <span class="badge bg-danger">ADMIN</span>
+                                                <span class="badge badge-soft-danger">ADMIN</span>
                                             }
                                             else if (u.RoleName == "SALES")
                                             {
-                                                <span class="badge bg-primary">SALES</span>
+                                                <span class="badge badge-soft-primary">SALES</span>
                                             }
                                             else if (u.RoleName == "ACCOUNTANT")
                                             {
-                                                <span class="badge bg-success">ACCOUNTANT</span>
+                                                <span class="badge badge-soft-success">ACCOUNTANT</span>
                                             }
                                             else
                                             {
-                                                <span class="badge bg-secondary">@u.RoleName</span>
+                                                <span class="badge badge-soft-secondary">@u.RoleName</span>
                                             }
                                         </td>
                                         <td class="text-center">
                                             @if (u.IsActive)
                                             {
-                                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đang hoạt động</span>
+                                                <span class="badge badge-soft-success"><i class="bi bi-check-circle me-1"></i>Đang hoạt động</span>
                                             }
                                             else
                                             {
-                                                <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>Đã khóa</span>
+                                                <span class="badge badge-soft-secondary"><i class="bi bi-slash-circle me-1"></i>Đã khóa</span>
                                             }
                                         </td>
                                         <td class="text-center">

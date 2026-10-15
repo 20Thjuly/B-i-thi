@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- SCRIPT 02: CREATE TABLES (3NF COMPLIANT)
 -- Đồ án: 18. Bán hàng & Công nợ Khách hàng - Sales & Accounts Receivable
 -- Hệ quản trị CSDL: Microsoft SQL Server

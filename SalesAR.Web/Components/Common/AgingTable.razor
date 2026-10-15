@@ -1,17 +1,17 @@
 @using SalesAR.UseCases.Models
 
 <div class="table-responsive">
-    <table class="table table-hover table-striped align-middle mb-0">
-        <thead class="table-light">
+    <table class="table table-hover align-middle mb-0">
+        <thead>
             <tr>
                 <th>Khách hàng</th>
-                <th class="text-end">Hạn mức</th>
+                <th class="text-end">Hạn mức tín dụng</th>
                 <th class="text-end">Tổng công nợ</th>
                 <th class="text-end">0–30 ngày</th>
                 <th class="text-end">31–60 ngày</th>
                 <th class="text-end">61–90 ngày</th>
-                <th class="text-end text-danger">>90 ngày</th>
-                <th class="text-end">Hạn mức còn lại</th>
+                <th class="text-end text-danger">&gt;90 ngày (Nợ xấu)</th>
+                <th class="text-end text-success">Hạn mức khả dụng</th>
                 @if (ShowActionLink)
                 {
                     <th class="text-center">Thao tác</th>
@@ -25,35 +25,61 @@
                 {
                     <tr>
                         <td>
-                            <div class="fw-bold">@item.CustomerCode</div>
-                            <div class="small text-muted">@item.CustomerName</div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge badge-soft-primary fw-semibold" style="font-size: 0.75rem;">@item.CustomerCode</span>
+                                <span class="fw-semibold text-dark">@item.CustomerName</span>
+                            </div>
                         </td>
-                        <td class="text-end">@item.CreditLimit.ToString("N0") đ</td>
-                        <td class="text-end fw-bold text-danger">@item.TotalDebt.ToString("N0") đ</td>
-                        <td class="text-end">@item.Bucket0To30.ToString("N0") đ</td>
-                        <td class="text-end">@item.Bucket31To60.ToString("N0") đ</td>
-                        <td class="text-end">@item.Bucket61To90.ToString("N0") đ</td>
-                        <td class="text-end fw-bold text-danger">@item.BucketOver90.ToString("N0") đ</td>
-                        <td class="text-end text-success fw-semibold">@item.AvailableCredit.ToString("N0") đ</td>
+                        <td class="text-end text-muted tabular-nums">@item.CreditLimit.ToString("N0") đ</td>
+                        <td class="text-end fw-bold text-danger tabular-nums">@item.TotalDebt.ToString("N0") đ</td>
+                        <td class="text-end tabular-nums">@item.Bucket0To30.ToString("N0") đ</td>
+                        <td class="text-end tabular-nums @(item.Bucket31To60 > 0 ? "text-warning fw-semibold" : "text-muted")">
+                            @item.Bucket31To60.ToString("N0") đ
+                        </td>
+                        <td class="text-end tabular-nums @(item.Bucket61To90 > 0 ? "text-warning fw-semibold" : "text-muted")">
+                            @item.Bucket61To90.ToString("N0") đ
+                        </td>
+                        <td class="text-end tabular-nums">
+                            @if (item.BucketOver90 > 0)
+                            {
+                                <span class="badge badge-soft-danger fw-bold tabular-nums">
+                                    @item.BucketOver90.ToString("N0") đ
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">0 đ</span>
+                            }
+                        </td>
+                        <td class="text-end text-success fw-bold tabular-nums">
+                            @item.AvailableCredit.ToString("N0") đ
+                        </td>
                         @if (ShowActionLink)
                         {
                             <td class="text-center">
-                                <a href="customers/@item.CustomerId" class="btn btn-sm btn-outline-primary">
+                                <a href="customers/@item.CustomerId" class="btn btn-sm btn-outline-primary" title="Xem hồ sơ chi tiết khách hàng">
                                     <i class="bi bi-eye me-1"></i>Chi tiết
                                 </a>
                             </td>
                         }
                     </tr>
                 }
-                <tr class="table-secondary fw-bold">
-                    <td>TỔNG CỘNG</td>
-                    <td class="text-end">@Summary.TotalCreditLimit.ToString("N0") đ</td>
-                    <td class="text-end text-danger">@Summary.TotalDebt.ToString("N0") đ</td>
-                    <td class="text-end">@Summary.Total0To30.ToString("N0") đ</td>
-                    <td class="text-end">@Summary.Total31To60.ToString("N0") đ</td>
-                    <td class="text-end">@Summary.Total61To90.ToString("N0") đ</td>
-                    <td class="text-end text-danger">@Summary.TotalOver90.ToString("N0") đ</td>
-                    <td class="text-end text-success">@((Summary.TotalCreditLimit - Summary.TotalDebt).ToString("N0")) đ</td>
+                <!-- Footer Summary Row -->
+                <tr class="table-light fw-bold border-top border-2" style="background-color: #f1f5f9;">
+                    <td class="text-dark">
+                        <i class="bi bi-calculator me-1 text-primary"></i>TỔNG CỘNG HỆ THỐNG
+                    </td>
+                    <td class="text-end text-dark tabular-nums">@Summary.TotalCreditLimit.ToString("N0") đ</td>
+                    <td class="text-end text-danger fs-6 tabular-nums">@Summary.TotalDebt.ToString("N0") đ</td>
+                    <td class="text-end text-dark tabular-nums">@Summary.Total0To30.ToString("N0") đ</td>
+                    <td class="text-end text-warning tabular-nums">@Summary.Total31To60.ToString("N0") đ</td>
+                    <td class="text-end text-warning tabular-nums">@Summary.Total61To90.ToString("N0") đ</td>
+                    <td class="text-end tabular-nums">
+                        <span class="badge badge-soft-danger fs-6 fw-bold">
+                            @Summary.TotalOver90.ToString("N0") đ
+                        </span>
+                    </td>
+                    <td class="text-end text-success fs-6 tabular-nums">@((Summary.TotalCreditLimit - Summary.TotalDebt).ToString("N0")) đ</td>
                     @if (ShowActionLink)
                     {
                         <td></td>
@@ -63,8 +89,9 @@
             else
             {
                 <tr>
-                    <td colspan="@(ShowActionLink ? 9 : 8)" class="text-center py-4 text-muted">
-                        <i class="bi bi-info-circle me-1"></i>Không có dữ liệu công nợ.
+                    <td colspan="@(ShowActionLink ? 9 : 8)" class="text-center py-5 text-muted">
+                        <i class="bi bi-info-circle fs-4 d-block mb-2 text-muted"></i>
+                        <span>Không có dữ liệu công nợ nào cần hiển thị.</span>
                     </td>
                 </tr>
             }

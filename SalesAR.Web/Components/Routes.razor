@@ -11,7 +11,7 @@
                             {
                                 <p class="text-dark mb-2">
                                     Tài khoản <strong>@context.User.Identity?.Name</strong> (Vai trò: 
-                                    <span class="badge bg-secondary">@(context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Chưa rõ")</span>)
+                                    <span class="badge badge-soft-secondary">@(context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Chưa rõ")</span>)
                                     không có quyền hạn để truy cập trang này.
                                 </p>
                                 <p class="text-muted small mb-4">

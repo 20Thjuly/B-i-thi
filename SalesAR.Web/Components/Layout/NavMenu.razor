@@ -1,101 +1,127 @@
-<div class="top-row ps-3 navbar navbar-dark bg-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold text-white d-flex align-items-center" href="dashboard">
-            <i class="bi bi-wallet2 text-primary me-2 fs-5"></i>Sales & AR
-        </a>
-    </div>
+<div class="sidebar-header px-3 d-flex align-items-center justify-content-between">
+    <a class="sidebar-brand d-flex align-items-center text-decoration-none" href="dashboard">
+        <div class="brand-icon-box me-2 d-flex align-items-center justify-content-center">
+            <i class="bi bi-lightning-charge-fill"></i>
+        </div>
+        <div>
+            <div class="d-flex align-items-center gap-1">
+                <span class="brand-title">SalesAR</span>
+                <span class="badge-pro">PRO</span>
+            </div>
+            <div class="brand-subtitle">Quản trị Bán hàng &amp; Công nợ</div>
+        </div>
+    </a>
 </div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
+    <nav class="flex-column py-2">
         <AuthorizeView>
             <Authorized>
                 <!-- 1. Tổng quan chung -->
-                <div class="nav-item px-3">
+                <div class="nav-section-title">TỔNG QUAN</div>
+                <div class="nav-item px-3 mb-1">
                     <NavLink class="nav-link" href="dashboard" Match="NavLinkMatch.All">
-                        <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                        <i class="bi bi-grid-1x2-fill nav-icon"></i>
+                        <span>Dashboard</span>
                     </NavLink>
                 </div>
 
                 <!-- 2. Nhóm Bán hàng (SALES & ADMIN) -->
                 <AuthorizeView Roles="ADMIN,SALES" Context="salesContext">
-                    <div class="px-3 pt-3 pb-1 text-uppercase text-white-50" style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;">
-                        Nghiệp vụ Bán hàng
-                    </div>
-                    <div class="nav-item px-3">
+                    <div class="nav-section-title">NGHIỆP VỤ BÁN HÀNG</div>
+                    <div class="nav-item px-3 mb-1">
                         <NavLink class="nav-link" href="customers">
-                            <i class="bi bi-people-fill me-2 text-info"></i> Khách hàng
+                            <i class="bi bi-people-fill nav-icon text-cyan"></i>
+                            <span>Khách hàng</span>
                         </NavLink>
                     </div>
-                    <div class="nav-item px-3">
+                    <div class="nav-item px-3 mb-1">
                         <NavLink class="nav-link" href="products">
-                            <i class="bi bi-box-seam me-2 text-info"></i> Hàng hóa
+                            <i class="bi bi-box-seam-fill nav-icon text-cyan"></i>
+                            <span>Hàng hóa &amp; Kho</span>
                         </NavLink>
                     </div>
-                    <div class="nav-item px-3">
+                    <div class="nav-item px-3 mb-1">
                         <NavLink class="nav-link" href="invoices">
-                            <i class="bi bi-receipt me-2 text-info"></i> Hóa đơn bán
+                            <i class="bi bi-receipt-cutoff nav-icon text-cyan"></i>
+                            <span>Hóa đơn bán hàng</span>
                         </NavLink>
                     </div>
                 </AuthorizeView>
 
                 <!-- 3. Nhóm Kế toán & Công nợ (ACCOUNTANT & ADMIN) -->
                 <AuthorizeView Roles="ADMIN,ACCOUNTANT" Context="accContext">
-                    <div class="px-3 pt-3 pb-1 text-uppercase text-white-50" style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;">
-                        Kế toán & Công nợ
-                    </div>
-                    <div class="nav-item px-3">
+                    <div class="nav-section-title">KẾ TOÁN &amp; CÔNG NỢ</div>
+                    <div class="nav-item px-3 mb-1">
                         <NavLink class="nav-link" href="debt">
-                            <i class="bi bi-card-checklist me-2 text-success"></i> Tổng hợp Công nợ
+                            <i class="bi bi-card-checklist nav-icon text-emerald"></i>
+                            <span>Tổng hợp Công nợ</span>
                         </NavLink>
                     </div>
-                    <div class="nav-item px-3">
+                    <div class="nav-item px-3 mb-1">
                         <NavLink class="nav-link" href="payments">
-                            <i class="bi bi-cash-stack me-2 text-success"></i> Thu tiền (FIFO)
+                            <i class="bi bi-cash-stack nav-icon text-emerald"></i>
+                            <span>Thu tiền (FIFO)</span>
                         </NavLink>
                     </div>
-                    <div class="nav-item px-3">
+                    <div class="nav-item px-3 mb-1">
                         <NavLink class="nav-link" href="aging-report">
-                            <i class="bi bi-graph-up-arrow me-2 text-success"></i> Báo cáo Tuổi nợ
+                            <i class="bi bi-bar-chart-line-fill nav-icon text-emerald"></i>
+                            <span>Báo cáo Tuổi nợ</span>
                         </NavLink>
                     </div>
                 </AuthorizeView>
 
                 <!-- Trường hợp chỉ có quyền SALES vẫn được xem công nợ khách hàng -->
                 <AuthorizeView Roles="SALES" Context="salesOnlyContext">
-                    <div class="nav-item px-3">
+                    <div class="nav-item px-3 mb-1">
                         <NavLink class="nav-link" href="debt">
-                            <i class="bi bi-card-checklist me-2 text-warning"></i> Xem Công nợ
+                            <i class="bi bi-eye-fill nav-icon text-warning"></i>
+                            <span>Xem Công nợ KH</span>
                         </NavLink>
                     </div>
                 </AuthorizeView>
 
                 <!-- 4. Nhóm Quản trị Hệ thống (CHỈ DÀNH CHO ADMIN) -->
                 <AuthorizeView Roles="ADMIN" Context="adminContext">
-                    <div class="px-3 pt-3 pb-1 text-uppercase text-white-50" style="font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;">
-                        Quản trị Hệ thống
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link text-warning" href="admin/users">
-                            <i class="bi bi-people-gear me-2"></i> Người dùng
+                    <div class="nav-section-title">HỆ THỐNG</div>
+                    <div class="nav-item px-3 mb-1">
+                        <NavLink class="nav-link" href="admin/users">
+                            <i class="bi bi-person-gear nav-icon text-amber"></i>
+                            <span>Người dùng (Users)</span>
                         </NavLink>
                     </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link text-warning" href="admin/roles">
-                            <i class="bi bi-shield-check me-2"></i> Vai trò & Quyền
+                    <div class="nav-item px-3 mb-1">
+                        <NavLink class="nav-link" href="admin/roles">
+                            <i class="bi bi-shield-lock-fill nav-icon text-amber"></i>
+                            <span>Phân quyền (Roles)</span>
                         </NavLink>
                     </div>
                 </AuthorizeView>
             </Authorized>
             <NotAuthorized>
-                <div class="nav-item px-3">
+                <div class="nav-item px-3 mb-1">
                     <NavLink class="nav-link" href="login">
-                        <i class="bi bi-box-arrow-in-right me-2 text-primary"></i> Đăng nhập
+                        <i class="bi bi-box-arrow-in-right nav-icon text-cyan"></i>
+                        <span>Đăng nhập hệ thống</span>
                     </NavLink>
                 </div>
             </NotAuthorized>
         </AuthorizeView>
+
+        <!-- Sidebar Footer Info -->
+        <div class="sidebar-footer px-3 pt-3 mt-3">
+            <div class="sidebar-footer-card p-2 rounded-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="bi bi-shield-check text-success" style="font-size: 0.85rem;"></i>
+                    <span class="text-white fw-semibold" style="font-size: 0.72rem;">Clean Architecture</span>
+                </div>
+                <div class="text-white-50" style="font-size: 0.68rem; line-height: 1.3;">
+                    Đề tài 18 • Bán hàng &amp; AR
+                </div>
+            </div>
+        </div>
     </nav>
 </div>

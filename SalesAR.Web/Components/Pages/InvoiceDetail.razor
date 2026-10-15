@@ -28,7 +28,7 @@
                     Hạn TT: @_invoice?.DueDate.ToString("dd/MM/yyyy")
                     @if (_invoice != null && _invoice.DueDate < DateTime.Today && _invoice.Status != "Paid")
                     {
-                        <span class="badge bg-danger ms-1">Đã quá hạn thanh toán</span>
+                        <span class="badge badge-soft-danger ms-1">Đã quá hạn thanh toán</span>
                     }
                 </div>
             </div>

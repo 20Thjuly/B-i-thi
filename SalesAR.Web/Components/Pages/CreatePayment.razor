@@ -236,22 +236,27 @@
                                 <div class="mb-3 pb-2 border-bottom">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <span class="text-muted small">Tổng công nợ cần thu:</span>
-                                        <span class="fw-bold text-danger">@_totalOutstandingDebt.ToString("N0") đ</span>
+                                        <span class="fw-bold text-danger tabular-nums">@_totalOutstandingDebt.ToString("N0") đ</span>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <span class="text-muted small">Số tiền đang nhập:</span>
-                                        <span class="fw-bold text-success">@_model.Amount.ToString("N0") đ</span>
+                                        <span class="fw-bold text-success fs-6 tabular-nums">@_model.Amount.ToString("N0") đ</span>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="text-muted small">Số hóa đơn chưa trả:</span>
-                                        <span class="fw-bold text-dark">@_outstandingInvoices.Count HĐ</span>
+                                        <span class="badge badge-soft-primary">@_outstandingInvoices.Count chứng từ</span>
                                     </div>
                                 </div>
 
-                                <h6 class="fw-bold small text-muted text-uppercase mb-2">Thứ tự cấn trừ (Từ cũ &rarr; mới):</h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-bordered align-middle mb-3">
-                                        <thead class="table-light small">
+                                <div class="alert alert-info py-2 px-3 small mb-3 d-flex align-items-center gap-2" style="font-size: 0.775rem;">
+                                    <i class="bi bi-info-circle-fill text-info fs-6"></i>
+                                    <span><strong>Nguyên tắc FIFO:</strong> Tiền thu tự động cấn trừ hóa đơn cũ nhất trước.</span>
+                                </div>
+
+                                <h6 class="fw-bold small text-muted text-uppercase mb-2" style="font-size: 0.7rem; letter-spacing: 0.05em;">Thứ tự cấn trừ dự kiến (Cũ &rarr; Mới):</h6>
+                                <div class="table-responsive mb-3">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead class="small">
                                             <tr>
                                                 <th>Số HĐ</th>
                                                 <th class="text-end">Dư nợ</th>
@@ -263,11 +268,11 @@
                                             {
                                                 <tr>
                                                     <td>
-                                                        <span class="fw-semibold">@prev.InvoiceNumber</span>
-                                                        <div class="text-muted" style="font-size: 0.75rem;">@prev.InvoiceDate.ToString("dd/MM/yyyy")</div>
+                                                        <span class="fw-semibold text-dark">@prev.InvoiceNumber</span>
+                                                        <div class="text-muted" style="font-size: 0.72rem;">@prev.InvoiceDate.ToString("dd/MM/yyyy")</div>
                                                     </td>
-                                                    <td class="text-end">@prev.RemainingAmount.ToString("N0") đ</td>
-                                                    <td class="text-end fw-bold @(prev.AllocatedAmount > 0 ? "text-success" : "text-muted")">
+                                                    <td class="text-end text-muted tabular-nums">@prev.RemainingAmount.ToString("N0") đ</td>
+                                                    <td class="text-end fw-bold tabular-nums @(prev.AllocatedAmount > 0 ? "text-success" : "text-muted")">
                                                         @prev.AllocatedAmount.ToString("N0") đ
                                                     </td>
                                                 </tr>

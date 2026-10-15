@@ -1,75 +1,420 @@
 :root {
     --bs-body-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    
+    /* Modern Brand Colors (Fintech & Enterprise Indigo / Slate) */
+    --brand-primary: #4f46e5;
+    --brand-primary-hover: #4338ca;
+    --brand-primary-light: #eef2ff;
+    --brand-primary-gradient: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+    
+    --brand-success: #10b981;
+    --brand-success-light: #ecfdf5;
+    --brand-warning: #f59e0b;
+    --brand-warning-light: #fffbeb;
+    --brand-danger: #f43f5e;
+    --brand-danger-light: #fff1f2;
+    --brand-info: #0ea5e9;
+    --brand-info-light: #f0f9ff;
+    
+    /* Neutral Shades */
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+
+    /* Elevated Shadows */
+    --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-card: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03);
+    --shadow-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+    --shadow-glow-primary: 0 4px 14px 0 rgba(79, 70, 229, 0.28);
+    --shadow-glow-success: 0 4px 14px 0 rgba(16, 185, 129, 0.28);
 }
 
+/* Base Document Styling */
 html, body {
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    color: #212529;
+    font-family: var(--bs-body-font-family);
+    color: var(--slate-800);
     background-color: #f8fafc;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    min-height: 100vh;
 }
 
-/* Kế thừa font chữ cho toàn bộ input, select, button để không bị lỗi chân chữ / font tiếng Việt */
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Font inheritance */
 input, button, select, optgroup, textarea, .form-control, .form-select, .btn {
     font-family: inherit;
 }
 
 a, .btn-link {
-    color: #0d6efd;
+    color: var(--brand-primary);
     text-decoration: none;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
 }
 
 a:hover {
-    text-decoration: underline;
+    color: var(--brand-primary-hover);
+    text-decoration: none;
 }
 
+/* Layout Content */
 .content {
-    padding-top: 1rem;
-    padding-bottom: 2rem;
+    padding-top: 1.5rem;
+    padding-bottom: 2.5rem;
 }
 
+/* Card System */
 .card {
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border-radius: 12px;
+    border: 1px solid var(--slate-200);
     background-color: #ffffff;
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card-hover-lift:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
 }
 
 .card-header {
     background-color: transparent;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--slate-100);
+    padding: 1rem 1.25rem;
 }
 
-.table th {
+.card-body {
+    padding: 1.25rem;
+}
+
+.card-footer {
+    background-color: var(--slate-50);
+    border-top: 1px solid var(--slate-100);
+    padding: 0.85rem 1.25rem;
+}
+
+/* Buttons System */
+.btn {
+    font-weight: 500;
+    border-radius: 8px;
+    padding: 0.45rem 0.95rem;
+    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary {
+    background: var(--brand-primary-gradient);
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+}
+
+.btn-primary:hover, .btn-primary:focus {
+    background: linear-gradient(135deg, #4338ca 0%, #2563eb 100%);
+    box-shadow: var(--shadow-glow-primary);
+    transform: translateY(-1px);
+    color: #ffffff;
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+.btn-success:hover, .btn-success:focus {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: var(--shadow-glow-success);
+    transform: translateY(-1px);
+    color: #ffffff;
+}
+
+.btn-outline-primary {
+    color: var(--brand-primary);
+    border-color: #c7d2fe;
+    background-color: #ffffff;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--brand-primary-light);
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
+    transform: translateY(-1px);
+}
+
+.btn-outline-secondary {
+    color: var(--slate-600);
+    border-color: var(--slate-300);
+    background-color: #ffffff;
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--slate-100);
+    color: var(--slate-800);
+    border-color: var(--slate-400);
+}
+
+.btn-outline-danger {
+    color: var(--brand-danger);
+    border-color: #fecdd3;
+    background-color: #ffffff;
+}
+
+.btn-outline-danger:hover {
+    background-color: var(--brand-danger-light);
+    border-color: var(--brand-danger);
+    color: var(--brand-danger);
+}
+
+.btn-sm {
+    padding: 0.3rem 0.65rem;
     font-size: 0.8125rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: #64748b;
+    border-radius: 6px;
+}
+
+/* Form Controls & Inputs */
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 1px solid var(--slate-300);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--slate-800);
+    background-color: #ffffff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    outline: none;
+}
+
+.form-control::placeholder {
+    color: var(--slate-400);
+    font-size: 0.85rem;
+}
+
+.form-label {
+    font-size: 0.85rem;
     font-weight: 600;
+    color: var(--slate-700);
+    margin-bottom: 0.35rem;
+}
+
+.input-group-text {
+    border-radius: 8px;
+    border: 1px solid var(--slate-300);
+    background-color: var(--slate-50);
+    color: var(--slate-600);
+    font-size: 0.875rem;
 }
 
 .validation-message {
     font-size: 0.8125rem;
-    color: #dc3545;
+    color: var(--brand-danger);
     margin-top: 0.25rem;
     display: block;
+    font-weight: 500;
+}
+
+/* Modern Tables */
+.table-responsive {
+    border-radius: 10px;
+    border: 1px solid var(--slate-200);
+    background-color: #ffffff;
+}
+
+.table {
+    margin-bottom: 0;
+    color: var(--slate-800);
+    font-size: 0.875rem;
+}
+
+.table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--slate-500);
+    font-weight: 600;
+    background-color: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+}
+
+.table td {
+    padding: 0.85rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(241, 245, 249, 0.65);
+}
+
+/* Tabular Numbers for Currency Columns */
+.tabular-nums, .text-end {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Custom Soft Badges */
+.badge {
+    font-weight: 600;
+    padding: 0.35em 0.65em;
+    border-radius: 6px;
+    letter-spacing: 0.01em;
+}
+
+.badge-soft-primary {
+    background-color: var(--brand-primary-light);
+    color: var(--brand-primary);
+    border: 1px solid #c7d2fe;
+}
+
+.badge-soft-success {
+    background-color: var(--brand-success-light);
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+.badge-soft-warning {
+    background-color: var(--brand-warning-light);
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.badge-soft-danger {
+    background-color: var(--brand-danger-light);
+    color: #be123c;
+    border: 1px solid #fecdd3;
+}
+
+.badge-soft-secondary {
+    background-color: var(--slate-100);
+    color: var(--slate-600);
+    border: 1px solid var(--slate-200);
+}
+
+/* Custom Alert Banner Styling */
+.alert {
+    border-radius: 10px;
+    border: 1px solid transparent;
+    padding: 0.85rem 1.15rem;
+    font-size: 0.875rem;
+}
+
+.alert-danger {
+    background-color: #fff1f2;
+    border-color: #fecdd3;
+    color: #9f1239;
+}
+
+.alert-success {
+    background-color: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.alert-warning {
+    background-color: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+.alert-info {
+    background-color: #f0f9ff;
+    border-color: #bae6fd;
+    color: #0369a1;
+}
+
+/* Hero & Welcome Card Gradient */
+.welcome-hero {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+    color: #ffffff;
+    border-radius: 14px;
+    padding: 1.75rem 2rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 25px -5px rgba(49, 46, 129, 0.25);
+}
+
+.welcome-hero::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 350px;
+    height: 350px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(99, 102, 241, 0) 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* Credit Utilization Progress Bar */
+.credit-bar-wrapper {
+    background-color: var(--slate-100);
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+}
+
+.credit-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
 }
 
 /* 390px Mobile Responsive Enhancements (K3.4) */
 @media (max-width: 576px) {
     .content {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
+        padding-left: 0.65rem !important;
+        padding-right: 0.65rem !important;
+        padding-top: 1rem !important;
     }
     
     .card-body {
         padding: 0.85rem !important;
     }
     
+    .card-header {
+        padding: 0.75rem 0.85rem !important;
+    }
+    
     .btn {
-        font-size: 0.85rem;
-        padding: 0.35rem 0.6rem;
+        font-size: 0.8125rem;
+        padding: 0.35rem 0.65rem;
     }
 
     h1, .h3 {
@@ -83,8 +428,8 @@ a:hover {
     .table-responsive {
         margin-bottom: 0;
         -webkit-overflow-scrolling: touch;
-        border: 1px solid #f1f5f9;
-        border-radius: 0.5rem;
+        border: 1px solid var(--slate-200);
+        border-radius: 8px;
     }
 
     .table {
@@ -100,5 +445,9 @@ a:hover {
 
     .modal-dialog {
         margin: 0.5rem !important;
+    }
+
+    .welcome-hero {
+        padding: 1.25rem 1.25rem;
     }
 }

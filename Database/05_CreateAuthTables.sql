@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- SCRIPT 05: CREATE AUTHENTICATION & AUTHORIZATION TABLES (ROLES & USERS)
 -- Đồ án: 18. Bán hàng & Công nợ Khách hàng - Sales & Accounts Receivable
 -- Hệ quản trị CSDL: Microsoft SQL Server
