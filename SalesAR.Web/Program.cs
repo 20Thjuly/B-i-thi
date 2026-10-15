@@ -57,6 +57,8 @@ builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IAgingReportRepository, AgingReportRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+builder.Services.AddScoped<IDebtAdjustmentRepository, DebtAdjustmentRepository>();
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 
 // 3. Customer Use Cases (Scoped)
 builder.Services.AddScoped<IViewCustomersUseCase, ViewCustomersUseCase>();
