@@ -4,6 +4,7 @@ using SalesAR.CoreBusiness.Security;
 using SalesAR.Plugins.DataStore.SQL;
 using SalesAR.UseCases.AgingReport;
 using SalesAR.UseCases.Auth;
+using SalesAR.UseCases.CreditLimitRequests;
 using SalesAR.UseCases.Customers;
 using SalesAR.UseCases.Invoices;
 using SalesAR.UseCases.Payments;
@@ -59,6 +60,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
 builder.Services.AddScoped<IDebtAdjustmentRepository, DebtAdjustmentRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<ICreditLimitRequestRepository, CreditLimitRequestRepository>();
 
 // 3. Customer Use Cases (Scoped)
 builder.Services.AddScoped<IViewCustomersUseCase, ViewCustomersUseCase>();
@@ -94,7 +96,13 @@ builder.Services.AddScoped<IAgingReportExporter, AgingReportExporter>();
 // 8. AI Debt Reminder Assistant (Scoped - K4.3)
 builder.Services.AddScoped<SalesAR.UseCases.AI.IDebtReminderAiService, DebtReminderAiService>();
 
-// 8. Auth & User Management Use Cases (Scoped)
+// 9. Credit Limit Approval Workflow Use Cases (Scoped - Part 5)
+builder.Services.AddScoped<ICreateCreditLimitRequestUseCase, CreateCreditLimitRequestUseCase>();
+builder.Services.AddScoped<IApproveCreditLimitRequestUseCase, ApproveCreditLimitRequestUseCase>();
+builder.Services.AddScoped<IRejectCreditLimitRequestUseCase, RejectCreditLimitRequestUseCase>();
+builder.Services.AddScoped<IViewCreditLimitRequestsUseCase, ViewCreditLimitRequestsUseCase>();
+
+// 10. Auth & User Management Use Cases (Scoped)
 builder.Services.AddScoped<ILoginUseCase, LoginUseCase>();
 builder.Services.AddScoped<IViewUsersUseCase, ViewUsersUseCase>();
 builder.Services.AddScoped<ICreateUserUseCase, CreateUserUseCase>();

@@ -1,0 +1,428 @@
+@page "/credit-requests"
+@attribute [Authorize(Roles = "ADMIN,CREDIT_MANAGER,SALES")]
+@using Microsoft.AspNetCore.Components.Authorization
+@using SalesAR.CoreBusiness.Models
+@using SalesAR.UseCases.CreditLimitRequests
+@using SalesAR.UseCases.Customers
+@inject IViewCreditLimitRequestsUseCase ViewRequestsUseCase
+@inject ICreateCreditLimitRequestUseCase CreateRequestUseCase
+@inject IApproveCreditLimitRequestUseCase ApproveRequestUseCase
+@inject IRejectCreditLimitRequestUseCase RejectRequestUseCase
+@inject IViewCustomersUseCase ViewCustomersUseCase
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Quy trình Phê duyệt Vượt hạn mức Tín dụng</PageTitle>
+
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-shield-exclamation text-primary me-2"></i>Phê duyệt Vượt hạn mức Tín dụng
+            </h1>
+            <p class="text-muted small mb-0">Quản lý và phê duyệt các giao dịch bán hàng vượt hạn mức công nợ cho phép</p>
+        </div>
+        <div class="d-flex gap-2">
+            <AuthorizeView Roles="ADMIN,SALES">
+                <button class="btn btn-primary btn-sm d-inline-flex align-items-center" @onclick="OpenCreateModal">
+                    <i class="bi bi-plus-circle me-1"></i> Tạo yêu cầu mới
+                </button>
+            </AuthorizeView>
+            <button class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center" @onclick="LoadDataAsync">
+                <i class="bi bi-arrow-clockwise me-1"></i> Tải lại
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert alert-@_messageType alert-dismissible fade show" role="alert">
+            <i class="bi @(_messageType == "success" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill") me-2"></i>
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+        </div>
+    }
+
+    <!-- Filter Pills -->
+    <div class="btn-group btn-group-sm mb-3">
+        <button class="btn @(_selectedFilter == "All" ? "btn-primary" : "btn-outline-primary")" @onclick='() => _selectedFilter = "All"'>
+            Tất cả (@_requests.Count)
+        </button>
+        <button class="btn @(_selectedFilter == "Pending" ? "btn-warning" : "btn-outline-warning")" @onclick='() => _selectedFilter = "Pending"'>
+            Chờ duyệt (@_requests.Count(r => r.Status == "Pending"))
+        </button>
+        <button class="btn @(_selectedFilter == "Approved" ? "btn-success" : "btn-outline-success")" @onclick='() => _selectedFilter = "Approved"'>
+            Đã chấp thuận (@_requests.Count(r => r.Status == "Approved"))
+        </button>
+        <button class="btn @(_selectedFilter == "Rejected" ? "btn-danger" : "btn-outline-danger")" @onclick='() => _selectedFilter = "Rejected"'>
+            Bị từ chối (@_requests.Count(r => r.Status == "Rejected"))
+        </button>
+    </div>
+
+    <!-- Requests Table -->
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Mã Yêu Cầu</th>
+                        <th>Khách Hàng</th>
+                        <th class="text-end">Giá trị Đơn hàng</th>
+                        <th class="text-end">Dư nợ Snapshot</th>
+                        <th class="text-end">Hạn mức Snapshot</th>
+                        <th>Người đề xuất</th>
+                        <th>Ngày tạo</th>
+                        <th class="text-center">Trạng thái</th>
+                        <th class="text-end pe-3">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                <div class="spinner-border spinner-border-sm text-primary me-2"></div> Đang tải dữ liệu yêu cầu...
+                            </td>
+                        </tr>
+                    }
+                    else if (!FilteredRequests.Any())
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">Không có yêu cầu duyệt nào phù hợp.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var r in FilteredRequests)
+                        {
+                            <tr>
+                                <td class="ps-3 fw-bold font-monospace text-primary">@r.RequestNumber</td>
+                                <td>
+                                    @GetCustomerName(r.CustomerId)
+                                    <div class="small text-muted">ID: @r.CustomerId</div>
+                                </td>
+                                <td class="text-end fw-semibold text-danger">@r.TransactionAmount.ToString("N0") đ</td>
+                                <td class="text-end text-muted">@r.CurrentDebtSnapshot.ToString("N0") đ</td>
+                                <td class="text-end text-muted">@r.CreditLimitSnapshot.ToString("N0") đ</td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">@r.RequestedBy</span>
+                                </td>
+                                <td class="small text-muted">@r.RequestedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-center">
+                                    @if (r.Status == "Pending")
+                                    {
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Chờ duyệt</span>
+                                    }
+                                    else if (r.Status == "Approved")
+                                    {
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đã chấp thuận</span>
+                                        @if (r.IsUsed)
+                                        {
+                                            <div class="badge bg-secondary mt-1">Đã xuất HĐ #@r.UsedInvoiceId</div>
+                                        }
+                                    }
+                                    else if (r.Status == "Rejected")
+                                    {
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Từ chối</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">@r.Status</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-3">
+                                    <button class="btn btn-outline-info btn-sm me-1" @onclick="() => ViewDetails(r)" title="Xem chi tiết & lịch sử">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                    <AuthorizeView Roles="ADMIN,CREDIT_MANAGER" Context="approverContext">
+                                        @if (r.Status == "Pending")
+                                        {
+                                            <button class="btn btn-outline-success btn-sm me-1" @onclick="() => OpenApproveModal(r)" title="Chấp thuận">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm" @onclick="() => OpenRejectModal(r)" title="Từ chối">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        }
+                                    </AuthorizeView>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Tạo Yêu Cầu Mới -->
+@if (_showCreateModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle text-primary me-2"></i>Lập Yêu Cầu Vượt Hạn Mức</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showCreateModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Khách hàng <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="_newCustomerId">
+                            <option value="0">-- Chọn khách hàng --</option>
+                            @foreach (var c in _customers)
+                            {
+                                <option value="@c.Id">@c.Code - @c.Name (Hạn mức: @c.CreditLimit.ToString("N0") đ)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Giá trị đơn hàng dự kiến (VNĐ) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" @bind="_newAmount" placeholder="Nhập số tiền..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Lý do đề xuất duyệt vượt hạn mức <span class="text-danger">*</span></label>
+                        <textarea class="form-control" rows="3" @bind="_newReason" placeholder="Nêu rõ lý do, hợp đồng, bảo lãnh thanh toán..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => _showCreateModal = false">Hủy</button>
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="SubmitCreateRequestAsync">Gửi Yêu Cầu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal Phê Duyệt / Từ Chối -->
+@if (_showActionModal && _selectedRequest != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header @(_isApproving ? "bg-success text-white" : "bg-danger text-white")">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi @(_isApproving ? "bi-check-circle" : "bi-x-circle") me-2"></i>
+                        @(_isApproving ? "Phê duyệt Yêu cầu" : "Từ chối Yêu cầu") - @_selectedRequest.RequestNumber
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showActionModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <strong>Lưu ý:</strong> Hệ thống sẽ tự động kiểm tra lại số dư công nợ thực tế trong database tại thời điểm này, không tin vào snapshot cũ.
+                    </div>
+                    <div class="mb-2"><strong>Khách hàng:</strong> @GetCustomerName(_selectedRequest.CustomerId)</div>
+                    <div class="mb-2"><strong>Số tiền đề xuất:</strong> <span class="text-danger fw-bold">@_selectedRequest.TransactionAmount.ToString("N0") đ</span></div>
+                    <div class="mb-2"><strong>Người đề xuất:</strong> @_selectedRequest.RequestedBy lúc @_selectedRequest.RequestedAt.ToString("dd/MM/yyyy HH:mm")</div>
+                    <div class="mb-3"><strong>Lý do của Sales:</strong> <em>@_selectedRequest.Reason</em></div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Ý kiến / Lý do quyết định của bạn <span class="text-danger">*</span></label>
+                        <textarea class="form-control" rows="3" @bind="_decisionReason" placeholder="Nhập lý do phê duyệt hoặc từ chối..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => _showActionModal = false">Đóng</button>
+                    @if (_isApproving)
+                    {
+                        <button type="button" class="btn btn-success btn-sm" @onclick="ConfirmApproveAsync">Xác nhận Phê duyệt</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-danger btn-sm" @onclick="ConfirmRejectAsync">Xác nhận Từ chối</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CreditLimitRequest> _requests = new();
+    private List<Customer> _customers = new();
+    private string _selectedFilter = "All";
+    private bool _loading = true;
+    private string? _message;
+    private string _messageType = "info";
+
+    // Modal state
+    private bool _showCreateModal = false;
+    private bool _showActionModal = false;
+    private bool _isApproving = false;
+    private CreditLimitRequest? _selectedRequest;
+
+    private int _newCustomerId;
+    private decimal _newAmount;
+    private string _newReason = string.Empty;
+    private string _decisionReason = string.Empty;
+
+    private IEnumerable<CreditLimitRequest> FilteredRequests => _selectedFilter switch
+    {
+        "Pending" => _requests.Where(r => r.Status == "Pending"),
+        "Approved" => _requests.Where(r => r.Status == "Approved"),
+        "Rejected" => _requests.Where(r => r.Status == "Rejected"),
+        _ => _requests
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        try
+        {
+            var reqList = await ViewRequestsUseCase.GetAllAsync();
+            _requests = reqList.ToList();
+
+            var custList = await ViewCustomersUseCase.ExecuteAsync();
+            _customers = custList.ToList();
+        }
+        catch (Exception ex)
+        {
+            _message = "Lỗi khi tải dữ liệu: " + ex.Message;
+            _messageType = "danger";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetCustomerName(int customerId)
+    {
+        var c = _customers.FirstOrDefault(x => x.Id == customerId);
+        return c != null ? $"{c.Code} - {c.Name}" : $"KH #{customerId}";
+    }
+
+    private void OpenCreateModal()
+    {
+        _newCustomerId = _customers.FirstOrDefault()?.Id ?? 0;
+        _newAmount = 0;
+        _newReason = string.Empty;
+        _showCreateModal = true;
+    }
+
+    private async Task SubmitCreateRequestAsync()
+    {
+        if (_newCustomerId <= 0)
+        {
+            _message = "Vui lòng chọn khách hàng.";
+            _messageType = "warning";
+            return;
+        }
+        if (_newAmount <= 0)
+        {
+            _message = "Số tiền đơn hàng phải lớn hơn 0.";
+            _messageType = "warning";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_newReason))
+        {
+            _message = "Vui lòng nhập lý do đề xuất duyệt vượt hạn mức.";
+            _messageType = "warning";
+            return;
+        }
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var username = authState.User.Identity?.Name ?? "sales";
+            var role = authState.User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value ?? "SALES";
+
+            await CreateRequestUseCase.ExecuteAsync(_newCustomerId, _newAmount, _newReason, username, role);
+            _showCreateModal = false;
+            _message = "Đã gửi yêu cầu phê duyệt thành công! Vui lòng chờ Credit Manager xử lý.";
+            _messageType = "success";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = "Lỗi: " + ex.Message;
+            _messageType = "danger";
+        }
+    }
+
+    private void OpenApproveModal(CreditLimitRequest req)
+    {
+        _selectedRequest = req;
+        _isApproving = true;
+        _decisionReason = string.Empty;
+        _showActionModal = true;
+    }
+
+    private void OpenRejectModal(CreditLimitRequest req)
+    {
+        _selectedRequest = req;
+        _isApproving = false;
+        _decisionReason = string.Empty;
+        _showActionModal = true;
+    }
+
+    private void ViewDetails(CreditLimitRequest req)
+    {
+        _selectedRequest = req;
+        _isApproving = true;
+        _decisionReason = req.DecisionReason ?? "";
+        _showActionModal = true;
+    }
+
+    private async Task ConfirmApproveAsync()
+    {
+        if (_selectedRequest == null) return;
+        if (string.IsNullOrWhiteSpace(_decisionReason))
+        {
+            _message = "Vui lòng nhập ý kiến / lý do phê duyệt.";
+            _messageType = "warning";
+            return;
+        }
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var username = authState.User.Identity?.Name ?? "creditmanager";
+            var role = authState.User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value ?? "CREDIT_MANAGER";
+
+            await ApproveRequestUseCase.ExecuteAsync(_selectedRequest.Id, username, role, _decisionReason);
+            _showActionModal = false;
+            _message = $"Đã phê duyệt yêu cầu {_selectedRequest.RequestNumber} thành công!";
+            _messageType = "success";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = "Lỗi khi phê duyệt: " + ex.Message;
+            _messageType = "danger";
+        }
+    }
+
+    private async Task ConfirmRejectAsync()
+    {
+        if (_selectedRequest == null) return;
+        if (string.IsNullOrWhiteSpace(_decisionReason))
+        {
+            _message = "Vui lòng nhập lý do từ chối yêu cầu.";
+            _messageType = "warning";
+            return;
+        }
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var username = authState.User.Identity?.Name ?? "creditmanager";
+            var role = authState.User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value ?? "CREDIT_MANAGER";
+
+            await RejectRequestUseCase.ExecuteAsync(_selectedRequest.Id, username, role, _decisionReason);
+            _showActionModal = false;
+            _message = $"Đã từ chối yêu cầu {_selectedRequest.RequestNumber}.";
+            _messageType = "warning";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = "Lỗi khi từ chối: " + ex.Message;
+            _messageType = "danger";
+        }
+    }
+}

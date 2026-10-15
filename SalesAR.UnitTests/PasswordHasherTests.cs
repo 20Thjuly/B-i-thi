@@ -49,10 +49,12 @@ public class PasswordHasherTests
         string adminHash = _hasher.HashPassword("Admin@123");
         string salesHash = _hasher.HashPassword("Sales@123");
         string accHash = _hasher.HashPassword("Acc@123");
+        string creditHash = _hasher.HashPassword("Credit@123");
 
-        System.IO.File.WriteAllText("seed_hashes.txt", $"ADMIN={adminHash}\nSALES={salesHash}\nACCOUNTANT={accHash}");
+        System.IO.File.WriteAllText("seed_hashes.txt", $"ADMIN={adminHash}\nSALES={salesHash}\nACCOUNTANT={accHash}\nCREDIT_MANAGER={creditHash}");
         Assert.True(_hasher.VerifyPassword("Admin@123", adminHash));
         Assert.True(_hasher.VerifyPassword("Sales@123", salesHash));
         Assert.True(_hasher.VerifyPassword("Acc@123", accHash));
+        Assert.True(_hasher.VerifyPassword("Credit@123", creditHash));
     }
 }

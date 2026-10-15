@@ -5,23 +5,26 @@ using SalesAR.UseCases.PluginInterfaces;
 
 public interface ICreateInvoiceUseCase
 {
-    Task<int> ExecuteAsync(Invoice invoice, List<InvoiceLine> lines);
+    Task<int> ExecuteAsync(Invoice invoice, List<InvoiceLine> lines, int? approvalRequestId = null);
 }
 
 public class CreateInvoiceUseCase : ICreateInvoiceUseCase
 {
     private readonly IInvoiceRepository _invoiceRepository;
     private readonly ICustomerRepository _customerRepository;
+    private readonly ICreditLimitRequestRepository? _creditLimitRequestRepository;
 
     public CreateInvoiceUseCase(
         IInvoiceRepository invoiceRepository, 
-        ICustomerRepository customerRepository)
+        ICustomerRepository customerRepository,
+        ICreditLimitRequestRepository? creditLimitRequestRepository = null)
     {
         _invoiceRepository = invoiceRepository;
         _customerRepository = customerRepository;
+        _creditLimitRequestRepository = creditLimitRequestRepository;
     }
 
-    public async Task<int> ExecuteAsync(Invoice invoice, List<InvoiceLine> lines)
+    public async Task<int> ExecuteAsync(Invoice invoice, List<InvoiceLine> lines, int? approvalRequestId = null)
     {
         if (invoice == null)
             throw new ArgumentNullException(nameof(invoice));
@@ -53,15 +56,43 @@ public class CreateInvoiceUseCase : ICreateInvoiceUseCase
         }
         invoice.TotalAmount = calculatedTotal;
 
-        // BƯỚC 3: Tính công nợ hiện tại & Validate Credit Limit (BUSINESS RULE 1 - K1.3)
+        // BƯỚC 3: Tính công nợ hiện tại & Validate Credit Limit (Rule 1, 2, 3, 4 - Part 5)
         decimal currentDebt = await _customerRepository.GetCurrentDebtAsync(invoice.CustomerId);
+        CreditLimitRequest? approvedRequest = null;
+
         if (currentDebt + invoice.TotalAmount > customer.CreditLimit)
         {
-            throw new InvalidOperationException("Không thể tạo hóa đơn. Công nợ hiện tại và giá trị hóa đơn vượt quá hạn mức tín dụng của khách hàng.");
+            // Vượt hạn mức: Kiểm tra xem có yêu cầu phê duyệt hợp lệ hay không
+            if (_creditLimitRequestRepository != null)
+            {
+                if (approvalRequestId.HasValue)
+                {
+                    approvedRequest = await _creditLimitRequestRepository.GetByIdAsync(approvalRequestId.Value);
+                }
+                else
+                {
+                    approvedRequest = await _creditLimitRequestRepository.GetValidApprovedRequestAsync(invoice.CustomerId, invoice.TotalAmount);
+                }
+            }
+
+            if (approvedRequest == null || approvedRequest.Status != "Approved" || approvedRequest.IsUsed || 
+                (approvedRequest.ExpiresAt.HasValue && approvedRequest.ExpiresAt.Value < DateTime.UtcNow) ||
+                approvedRequest.TransactionAmount < invoice.TotalAmount)
+            {
+                throw new InvalidOperationException("Không thể tạo hóa đơn. Công nợ hiện tại và giá trị hóa đơn vượt quá hạn mức tín dụng của khách hàng.");
+            }
         }
 
-        // BƯỚC 4, 5, 6: Tạo Invoice, InvoiceLine và Cập nhật Stock trong cùng 1 Transaction (K2.2)
+        // BƯỚC 4, 5, 6: Tạo Invoice, InvoiceLine và Cập nhật Stock trong cùng 1 Transaction
         invoice.Status = "Unpaid";
-        return await _invoiceRepository.CreateInvoiceWithLinesAsync(invoice, lines);
+        int invoiceId = await _invoiceRepository.CreateInvoiceWithLinesAsync(invoice, lines);
+
+        // Đánh dấu yêu cầu phê duyệt đã được sử dụng cho hóa đơn này (Chống sử dụng lại approval)
+        if (approvedRequest != null && _creditLimitRequestRepository != null)
+        {
+            await _creditLimitRequestRepository.MarkAsUsedAsync(approvedRequest.Id, invoiceId);
+        }
+
+        return invoiceId;
     }
 }
