@@ -3,7 +3,7 @@
 @inject IViewInvoicesUseCase ViewInvoicesUseCase
 @inject IViewCustomerByIdUseCase ViewCustomerByIdUseCase
 @inject IViewProductsUseCase ViewProductsUseCase
-@inject IPaymentRepository PaymentRepository
+@inject IViewPaymentsUseCase ViewPaymentsUseCase
 @inject NavigationManager Navigation
 
 <PageTitle>Chi tiết Hóa đơn #@(_invoice?.InvoiceNumber ?? Id.ToString())</PageTitle>
@@ -257,9 +257,9 @@
                 _products = (await ViewProductsUseCase.ExecuteAsync()).ToList();
 
                 // Lấy tất cả phân bổ của khách hàng này để lọc ra các phân bổ thuộc InvoiceId
-                var customerAllocations = await PaymentRepository.GetAllocationsByCustomerAsync(_invoice.CustomerId);
+                var customerAllocations = await ViewPaymentsUseCase.GetAllocationsByCustomerAsync(_invoice.CustomerId);
                 _allocations = customerAllocations.Where(a => a.InvoiceId == Id).ToList();
-                _payments = (await PaymentRepository.GetPaymentsByCustomerAsync(_invoice.CustomerId)).ToList();
+                _payments = (await ViewPaymentsUseCase.GetPaymentsByCustomerAsync(_invoice.CustomerId)).ToList();
 
                 _totalPaid = _allocations.Sum(a => a.AllocatedAmount);
                 _remainingBalance = Math.Max(0, _invoice.TotalAmount - _totalPaid);

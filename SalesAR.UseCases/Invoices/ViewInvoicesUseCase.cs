@@ -1,6 +1,7 @@
 namespace SalesAR.UseCases.Invoices;
 
 using SalesAR.CoreBusiness.Models;
+using SalesAR.UseCases.Models;
 using SalesAR.UseCases.PluginInterfaces;
 
 public interface IViewInvoicesUseCase
@@ -8,6 +9,8 @@ public interface IViewInvoicesUseCase
     Task<IEnumerable<Invoice>> ExecuteAsync();
     Task<Invoice?> GetByIdAsync(int id);
     Task<IEnumerable<InvoiceLine>> GetLinesAsync(int invoiceId);
+    Task<IEnumerable<Invoice>> GetInvoicesByCustomerAsync(int customerId);
+    Task<IEnumerable<InvoiceOutstandingDto>> GetOutstandingInvoicesByCustomerAsync(int customerId);
 }
 
 public class ViewInvoicesUseCase : IViewInvoicesUseCase
@@ -33,4 +36,15 @@ public class ViewInvoicesUseCase : IViewInvoicesUseCase
     {
         return await _invoiceRepository.GetLinesByInvoiceIdAsync(invoiceId);
     }
+
+    public async Task<IEnumerable<Invoice>> GetInvoicesByCustomerAsync(int customerId)
+    {
+        return await _invoiceRepository.GetInvoicesByCustomerAsync(customerId);
+    }
+
+    public async Task<IEnumerable<InvoiceOutstandingDto>> GetOutstandingInvoicesByCustomerAsync(int customerId)
+    {
+        return await _invoiceRepository.GetOutstandingInvoicesByCustomerAsync(customerId);
+    }
 }
+

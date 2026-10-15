@@ -2,7 +2,7 @@
 @attribute [Authorize]
 @inject IViewCustomersUseCase ViewCustomersUseCase
 @inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
-@inject IInvoiceRepository InvoiceRepository
+@inject IViewInvoicesUseCase ViewInvoicesUseCase
 @inject SalesAR.UseCases.AI.IDebtReminderAiService DebtReminderAiService
 
 <PageTitle>Theo dõi Công nợ Khách hàng</PageTitle>
@@ -340,7 +340,7 @@
         _isGeneratingAi = true;
         try
         {
-            var unpaid = await InvoiceRepository.GetOutstandingInvoicesByCustomerAsync(_selectedDebt.CustomerId);
+            var unpaid = await ViewInvoicesUseCase.GetOutstandingInvoicesByCustomerAsync(_selectedDebt.CustomerId);
             _aiDraftEmail = await DebtReminderAiService.DraftReminderEmailAsync(_selectedDebt, unpaid, _aiTone);
         }
         finally

@@ -8,6 +8,8 @@ public interface IViewPaymentsUseCase
     Task<IEnumerable<Payment>> ExecuteAsync();
     Task<Payment?> GetByIdAsync(int id);
     Task<IEnumerable<PaymentAllocation>> GetAllocationsAsync(int paymentId);
+    Task<IEnumerable<Payment>> GetPaymentsByCustomerAsync(int customerId);
+    Task<IEnumerable<PaymentAllocation>> GetAllocationsByCustomerAsync(int customerId);
 }
 
 public class ViewPaymentsUseCase : IViewPaymentsUseCase
@@ -33,4 +35,15 @@ public class ViewPaymentsUseCase : IViewPaymentsUseCase
     {
         return await _paymentRepository.GetAllocationsByPaymentIdAsync(paymentId);
     }
+
+    public async Task<IEnumerable<Payment>> GetPaymentsByCustomerAsync(int customerId)
+    {
+        return await _paymentRepository.GetPaymentsByCustomerAsync(customerId);
+    }
+
+    public async Task<IEnumerable<PaymentAllocation>> GetAllocationsByCustomerAsync(int customerId)
+    {
+        return await _paymentRepository.GetAllocationsByCustomerAsync(customerId);
+    }
 }
+

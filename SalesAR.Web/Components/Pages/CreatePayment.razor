@@ -4,8 +4,9 @@
 @inject IAllocatePaymentUseCase AllocatePaymentUseCase
 @inject IViewCustomersUseCase ViewCustomersUseCase
 @inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
-@inject IInvoiceRepository InvoiceRepository
+@inject IViewInvoicesUseCase ViewInvoicesUseCase
 @inject NavigationManager Navigation
+
 
 <PageTitle>Ghi nhận Thu tiền & Phân bổ FIFO</PageTitle>
 
@@ -343,7 +344,7 @@
 
             if (_selectedCustomer != null)
             {
-                var outstanding = await InvoiceRepository.GetOutstandingInvoicesByCustomerAsync(customerId);
+                var outstanding = await ViewInvoicesUseCase.GetOutstandingInvoicesByCustomerAsync(customerId);
                 _outstandingInvoices = outstanding.OrderBy(i => i.InvoiceDate).ThenBy(i => i.Id).ToList();
                 _totalOutstandingDebt = _outstandingInvoices.Sum(i => i.RemainingAmount);
                 

@@ -2,8 +2,8 @@
 @attribute [Authorize]
 @inject IViewCustomerByIdUseCase ViewCustomerByIdUseCase
 @inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
-@inject IInvoiceRepository InvoiceRepository
-@inject IPaymentRepository PaymentRepository
+@inject IViewInvoicesUseCase ViewInvoicesUseCase
+@inject IViewPaymentsUseCase ViewPaymentsUseCase
 @inject NavigationManager Navigation
 
 <PageTitle>Chi tiết Khách hàng - @(_customer?.Name ?? "Loading...")</PageTitle>
@@ -242,9 +242,9 @@
             if (_customer != null)
             {
                 _debtInfo = await GetCustomerDebtUseCase.ExecuteAsync(Id);
-                _invoices = await InvoiceRepository.GetInvoicesByCustomerAsync(Id);
-                _payments = await PaymentRepository.GetPaymentsByCustomerAsync(Id);
-                _allocations = await PaymentRepository.GetAllocationsByCustomerAsync(Id);
+                _invoices = await ViewInvoicesUseCase.GetInvoicesByCustomerAsync(Id);
+                _payments = await ViewPaymentsUseCase.GetPaymentsByCustomerAsync(Id);
+                _allocations = await ViewPaymentsUseCase.GetAllocationsByCustomerAsync(Id);
             }
         }
         finally
