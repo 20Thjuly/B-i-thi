@@ -84,6 +84,7 @@ builder.Services.AddScoped<IAllocatePaymentUseCase, AllocatePaymentUseCase>();
 builder.Services.AddScoped<IRecordPaymentUseCase, RecordPaymentUseCase>();
 builder.Services.AddScoped<IProcessPaymentUseCase, ProcessPaymentUseCase>();
 builder.Services.AddScoped<IViewPaymentsUseCase, ViewPaymentsUseCase>();
+builder.Services.AddScoped<IReallocatePaymentUseCase, ReallocatePaymentUseCase>();
 
 // 7. Aging Report Use Cases & Exporters (Scoped)
 builder.Services.AddScoped<IGetAgingReportUseCase, GetAgingReportUseCase>();

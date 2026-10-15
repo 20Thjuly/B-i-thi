@@ -25,6 +25,7 @@ public class FakeCustomerRepository : ICustomerRepository
     public Task DeleteAsync(int id) => Task.CompletedTask;
     public Task<decimal> GetCurrentDebtAsync(int customerId) => Task.FromResult(_currentDebt);
     public Task<CustomerDebtDto?> GetCustomerDebtDetailsAsync(int customerId) => Task.FromResult<CustomerDebtDto?>(null);
+    public Task UpdateCreditLimitAsync(int customerId, decimal newCreditLimit, string changedBy, string reason) => Task.CompletedTask;
 }
 
 public class FakeInvoiceRepository : IInvoiceRepository

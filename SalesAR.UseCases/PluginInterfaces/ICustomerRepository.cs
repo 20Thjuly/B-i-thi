@@ -13,4 +13,5 @@ public interface ICustomerRepository
     Task DeleteAsync(int id);
     Task<decimal> GetCurrentDebtAsync(int customerId);
     Task<CustomerDebtDto?> GetCustomerDebtDetailsAsync(int customerId);
+    Task UpdateCreditLimitAsync(int customerId, decimal newCreditLimit, string changedBy, string reason);
 }

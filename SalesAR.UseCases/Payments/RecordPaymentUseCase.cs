@@ -35,24 +35,30 @@ public class RecordPaymentUseCase : IRecordPaymentUseCase
         if (payment.Amount <= 0)
             throw new InvalidOperationException("Số tiền thanh toán phải lớn hơn 0.");
 
+        // 1. Chống ghi nhận trùng lặp payment ở tầng UseCase
+        var existing = await _paymentRepository.GetByPaymentNumberAsync(payment.PaymentNumber);
+        if (existing != null)
+        {
+            throw new InvalidOperationException($"Số phiếu thu '{payment.PaymentNumber}' đã tồn tại trong hệ thống. Không thể ghi nhận trùng lặp.");
+        }
+
+        // 2. Validate khách hàng
         var customer = await _customerRepository.GetByIdAsync(payment.CustomerId);
         if (customer == null)
             throw new InvalidOperationException($"Không tìm thấy khách hàng với mã ID: {payment.CustomerId}.");
 
-        // Lấy các hóa đơn còn dư nợ của khách hàng
+        // 3. Lấy các hóa đơn còn dư nợ của khách hàng (theo công thức: TotalAmount - PaidAmount - AdjustedAmount)
         var outstandingInvoices = await _invoiceRepository.GetOutstandingInvoicesByCustomerAsync(payment.CustomerId);
         var unpaidList = outstandingInvoices.ToList();
 
-        if (unpaidList.Count == 0)
-            throw new InvalidOperationException("Khách hàng hiện không có hóa đơn nào còn nợ để thanh toán.");
+        // 4. Áp dụng Business Rule (FIFO allocation theo DueDate)
+        // Nếu khách hàng thanh toán dư (overpayment) hoặc đặt cọc trước (unpaidList rỗng), 
+        // phiếu thu vẫn được ghi nhận an toàn, phần tiền dư không bị mất.
+        var allocations = unpaidList.Count > 0 
+            ? _allocatePaymentUseCase.Execute(0, payment.Amount, unpaidList)
+            : new List<PaymentAllocation>();
 
-        // Áp dụng Business Rule 2 (FIFO allocation)
-        var allocations = _allocatePaymentUseCase.Execute(0, payment.Amount, unpaidList);
-
-        if (allocations.Count == 0)
-            throw new InvalidOperationException("Không thể phân bổ thanh toán cho các hóa đơn hiện tại.");
-
-        // Ghi nhận Payment và Allocations trong 1 Transaction tại Repository (K2.2)
+        // 5. Ghi nhận Payment, Allocations, cập nhật trạng thái hóa đơn & AuditLog trong 1 Transaction tại Repository
         return await _paymentRepository.CreatePaymentWithAllocationsAsync(payment, allocations);
     }
 }

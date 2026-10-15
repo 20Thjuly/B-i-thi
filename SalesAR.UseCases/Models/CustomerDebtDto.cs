@@ -7,6 +7,11 @@ public class CustomerDebtDto
     public string CustomerName { get; set; } = string.Empty;
     public decimal TotalInvoiced { get; set; }
     public decimal TotalPaid { get; set; }
+    public decimal TotalAdjusted { get; set; }
+    
+    /// <summary>
+    /// Công thức chuẩn: CurrentDebt = TotalInvoiced - TotalPaid - TotalAdjusted
+    /// </summary>
     public decimal CurrentDebt { get; set; }
     public decimal CreditLimit { get; set; }
     public decimal AvailableCredit => Math.Max(0, CreditLimit - CurrentDebt);

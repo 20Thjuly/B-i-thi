@@ -9,6 +9,11 @@ public class InvoiceOutstandingDto
     public DateTime DueDate { get; set; }
     public decimal TotalAmount { get; set; }
     public decimal PaidAmount { get; set; }
-    public decimal RemainingAmount => Math.Max(0, TotalAmount - PaidAmount);
+    public decimal AdjustedAmount { get; set; }
+    
+    /// <summary>
+    /// Công thức chuẩn: OutstandingAmount = InvoiceAmount - ValidAllocatedPayments - ValidAdjustments
+    /// </summary>
+    public decimal RemainingAmount => Math.Max(0, TotalAmount - PaidAmount - AdjustedAmount);
     public string Status { get; set; } = "Unpaid";
 }

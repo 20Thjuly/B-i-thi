@@ -10,6 +10,14 @@ public interface IAllocatePaymentUseCase
 
 public class AllocatePaymentUseCase : IAllocatePaymentUseCase
 {
+    /// <summary>
+    /// Thuật toán phân bổ thanh toán FIFO chuẩn:
+    /// - Sắp xếp theo ngày đến hạn (DueDate ASC) tăng dần (hóa đơn đến hạn trước trả trước).
+    /// - Sau đó đến ngày lập hóa đơn (InvoiceDate ASC), cuối cùng là Id để đảm bảo tính tất định.
+    /// - Tổng phân bổ cho từng hóa đơn không vượt số dư nợ còn lại (RemainingAmount).
+    /// - Tổng phân bổ không vượt số tiền thanh toán khả dụng.
+    /// - Hỗ trợ thanh toán một phần, thanh toán nhiều hóa đơn và thanh toán dư (overpayment).
+    /// </summary>
     public List<PaymentAllocation> Execute(int paymentId, decimal paymentAmount, IEnumerable<InvoiceOutstandingDto> unpaidInvoices)
     {
         if (paymentAmount <= 0)
@@ -18,10 +26,11 @@ public class AllocatePaymentUseCase : IAllocatePaymentUseCase
         if (unpaidInvoices == null)
             return new List<PaymentAllocation>();
 
-        // Sắp xếp InvoiceDate tăng dần, Id tăng dần (Hóa đơn cũ nhất lên đầu - FIFO)
+        // Sắp xếp DueDate ASC, InvoiceDate ASC, Id ASC (Chuẩn FIFO theo hạn nợ)
         var sortedInvoices = unpaidInvoices
             .Where(i => i.RemainingAmount > 0)
-            .OrderBy(i => i.InvoiceDate)
+            .OrderBy(i => i.DueDate)
+            .ThenBy(i => i.InvoiceDate)
             .ThenBy(i => i.Id)
             .ToList();
 
@@ -33,7 +42,7 @@ public class AllocatePaymentUseCase : IAllocatePaymentUseCase
             if (remainingPayment <= 0)
                 break;
 
-            // Không phân bổ vượt số dư Invoice
+            // Không phân bổ vượt số dư nợ có thể thu của Invoice (RemainingAmount)
             decimal allocated = Math.Min(remainingPayment, inv.RemainingAmount);
             if (allocated > 0)
             {
@@ -48,7 +57,7 @@ public class AllocatePaymentUseCase : IAllocatePaymentUseCase
             }
         }
 
-        // Tổng allocation không vượt Payment.Amount
+        // Kiểm tra ràng buộc bảo vệ: Tổng allocation không vượt Payment.Amount
         decimal totalAllocated = allocations.Sum(a => a.AllocatedAmount);
         if (totalAllocated > paymentAmount)
         {

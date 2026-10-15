@@ -57,10 +57,15 @@ public class InvoiceRepository : IInvoiceRepository
             SELECT Id, InvoiceNumber, CustomerId, InvoiceDate, DueDate, TotalAmount, Status 
             FROM dbo.Invoices 
             WHERE CustomerId = @CustomerId AND Status <> 'Paid' AND Status <> 'Cancelled'
-            ORDER BY InvoiceDate ASC, Id ASC;";
+            ORDER BY DueDate ASC, InvoiceDate ASC, Id ASC;";
         return await connection.QueryAsync<Invoice>(sql, new { CustomerId = customerId });
     }
 
+    /// <summary>
+    /// Lấy danh sách hóa đơn còn dư nợ của khách hàng:
+    /// Thống nhất công thức: RemainingAmount = TotalAmount - ValidAllocatedPayments - ValidAdjustments
+    /// Sắp xếp theo thứ tự FIFO: DueDate ASC, InvoiceDate ASC, Id ASC.
+    /// </summary>
     public async Task<IEnumerable<InvoiceOutstandingDto>> GetOutstandingInvoicesByCustomerAsync(int customerId)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -73,6 +78,7 @@ public class InvoiceRepository : IInvoiceRepository
                 i.DueDate,
                 i.TotalAmount,
                 ISNULL(pa.Allocated, 0) AS PaidAmount,
+                ISNULL(da.Adjusted, 0) AS AdjustedAmount,
                 i.Status
             FROM dbo.Invoices i
             LEFT JOIN (
@@ -80,8 +86,14 @@ public class InvoiceRepository : IInvoiceRepository
                 FROM dbo.PaymentAllocations
                 GROUP BY InvoiceId
             ) pa ON i.Id = pa.InvoiceId
+            LEFT JOIN (
+                SELECT InvoiceId, SUM(Amount) AS Adjusted
+                FROM dbo.DebtAdjustments
+                WHERE InvoiceId IS NOT NULL
+                GROUP BY InvoiceId
+            ) da ON i.Id = da.InvoiceId
             WHERE i.CustomerId = @CustomerId AND i.Status <> 'Paid' AND i.Status <> 'Cancelled'
-            ORDER BY i.InvoiceDate ASC, i.Id ASC;";
+            ORDER BY i.DueDate ASC, i.InvoiceDate ASC, i.Id ASC;";
         return await connection.QueryAsync<InvoiceOutstandingDto>(sql, new { CustomerId = customerId });
     }
 
@@ -109,7 +121,8 @@ public class InvoiceRepository : IInvoiceRepository
                 SET StockQuantity = StockQuantity - @Quantity
                 WHERE Id = @ProductId AND StockQuantity >= @Quantity;";
 
-            foreach (var line in lines)
+            var lineList = lines.ToList();
+            foreach (var line in lineList)
             {
                 line.InvoiceId = invoiceId;
                 await connection.ExecuteAsync(insertLineSql, line, transaction);
@@ -120,6 +133,14 @@ public class InvoiceRepository : IInvoiceRepository
                     throw new InvalidOperationException($"Sản phẩm (ID: {line.ProductId}) không đủ số lượng tồn kho để xuất hóa đơn.");
                 }
             }
+
+            // Ghi nhận AuditLog tự động khi tạo hóa đơn (Part 4 - Requirement 4)
+            const string auditSql = @"
+                INSERT INTO dbo.AuditLogs (TableName, RecordId, Action, NewValues, ChangedBy, ChangedAt, Reason)
+                VALUES ('Invoices', @RecordId, 'INSERT', @NewValues, 'sales', SYSDATETIME(), N'Lập hóa đơn bán hàng mới');";
+
+            var auditJson = $"{{\"InvoiceNumber\":\"{invoice.InvoiceNumber}\",\"CustomerId\":{invoice.CustomerId},\"TotalAmount\":{invoice.TotalAmount},\"LinesCount\":{lineList.Count}}}";
+            await connection.ExecuteAsync(auditSql, new { RecordId = invoiceId, NewValues = auditJson }, transaction);
 
             transaction.Commit();
             return invoiceId;

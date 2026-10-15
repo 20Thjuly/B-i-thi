@@ -14,6 +14,15 @@ public class AgingReportRepository : IAgingReportRepository
         _connectionFactory = connectionFactory;
     }
 
+    /// <summary>
+    /// Tính tuổi nợ từ dữ liệu thật dựa trên DueDate và ngày tham chiếu @AsOfDate.
+    /// Công thức số dư hóa đơn chuẩn: RemainingAmount = TotalAmount - ValidAllocatedPayments - ValidAdjustments.
+    /// Nhóm tuổi nợ thống nhất toàn hệ thống:
+    /// - Bucket 0-30: Trong hạn nợ hoặc quá hạn đến 30 ngày (DaysOverdue <= 30)
+    /// - Bucket 31-60: Quá hạn 31 đến 60 ngày
+    /// - Bucket 61-90: Quá hạn 61 đến 90 ngày
+    /// - Bucket >90: Quá hạn trên 90 ngày (Nợ khó đòi)
+    /// </summary>
     public async Task<AgingReportSummary> GetAgingReportAsync(DateTime asOfDate)
     {
         using var connection = _connectionFactory.CreateConnection();
@@ -33,7 +42,7 @@ public class AgingReportRepository : IAgingReportRepository
                 SELECT 
                     i.Id,
                     i.CustomerId,
-                    (i.TotalAmount - ISNULL(pa.Allocated, 0)) AS RemainingAmount,
+                    (i.TotalAmount - ISNULL(pa.Allocated, 0) - ISNULL(da.Adjusted, 0)) AS RemainingAmount,
                     DATEDIFF(day, i.DueDate, @AsOfDate) AS DaysOverdue
                 FROM dbo.Invoices i
                 LEFT JOIN (
@@ -41,6 +50,12 @@ public class AgingReportRepository : IAgingReportRepository
                     FROM dbo.PaymentAllocations
                     GROUP BY InvoiceId
                 ) pa ON i.Id = pa.InvoiceId
+                LEFT JOIN (
+                    SELECT InvoiceId, SUM(Amount) AS Adjusted
+                    FROM dbo.DebtAdjustments
+                    WHERE InvoiceId IS NOT NULL
+                    GROUP BY InvoiceId
+                ) da ON i.Id = da.InvoiceId
                 WHERE i.Status <> 'Paid' AND i.Status <> 'Cancelled'
             ) inv ON c.Id = inv.CustomerId AND inv.RemainingAmount > 0
             GROUP BY c.Id, c.Code, c.Name, c.CreditLimit
