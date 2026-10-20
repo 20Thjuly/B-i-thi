@@ -1,26 +1,29 @@
 @page "/"
 @page "/dashboard"
 @attribute [Authorize]
-@inject IGetAgingReportUseCase GetAgingReportUseCase
-@inject IViewInvoicesUseCase ViewInvoicesUseCase
+@using SalesAR.UseCases.Dashboard
+@using SalesAR.UseCases.Dashboard.Models
+@using SalesAR.UseCases.Customers
+@using SalesAR.CoreBusiness.Models
+@inject IArDashboardUseCase DashboardUseCase
 @inject IViewCustomersUseCase ViewCustomersUseCase
 
-<PageTitle>Dashboard - Bán hàng & Công nợ</PageTitle>
+<PageTitle>Dashboard Quản Trị Công Nợ & Dự Báo Dòng Tiền - SalesAR</PageTitle>
 
 <div class="container-fluid px-0">
-    <!-- Hero Welcome Banner -->
+    <!-- Header Banner -->
     <div class="welcome-hero mb-4">
         <div class="row align-items-center g-3 position-relative" style="z-index: 2;">
             <div class="col-12 col-lg-8">
                 <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-white bg-opacity-10 text-white-50 small mb-2 border border-white border-opacity-10">
                     <span class="spinner-grow spinner-grow-sm text-success" style="width: 6px; height: 6px;" role="status"></span>
-                    <span>Hệ thống trực tuyến • Dữ liệu đồng bộ thời gian thực</span>
+                    <span>Hệ thống trực tuyến • Dữ liệu đối soát SQL Server thời gian thực</span>
                 </div>
                 <h1 class="h3 fw-bold text-white mb-2">
-                    Tổng quan Bán hàng &amp; Công nợ Khách hàng
+                    <i class="bi bi-speedometer2 me-2"></i>Dashboard Quản Trị Công Nợ &amp; Dự Báo Dòng Tiền (AR Dashboard)
                 </h1>
-                <p class="text-white text-opacity-75 mb-0 small" style="max-width: 600px;">
-                    Theo dõi sát sao hạn mức tín dụng, dòng tiền thanh toán FIFO và tiến độ thu hồi nợ xấu để tối ưu hóa nguồn vốn lưu động.
+                <p class="text-white text-opacity-75 mb-0 small" style="max-width: 680px;">
+                    Hợp nhất chỉ số công nợ, phân tích tuổi nợ chi tiết, đối chiếu doanh thu vs dòng tiền thực thu và dự báo thu tiền theo mô hình xác suất thanh toán kỳ hạn.
                 </p>
             </div>
             <div class="col-12 col-lg-4 text-lg-end">
@@ -31,6 +34,93 @@
                     <a href="payments/create" class="btn btn-success d-inline-flex align-items-center shadow-sm">
                         <i class="bi bi-cash-stack me-1"></i> Thu tiền FIFO
                     </a>
+                    <a href="reminders" class="btn btn-outline-light d-inline-flex align-items-center shadow-sm">
+                        <i class="bi bi-bell-fill me-1"></i> Nhắc nợ
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thanh Bộ lọc Thông minh (Smart Filter Bar) -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4 bg-white">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-end">
+                <!-- Ngày đối soát -->
+                <div class="col-12 col-sm-6 col-md-3 col-lg-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">
+                        <i class="bi bi-calendar-event me-1"></i>Ngày đối soát:
+                    </label>
+                    <input type="date" class="form-control form-control-sm" @bind="_filter.AsOfDate" />
+                </div>
+
+                <!-- Từ ngày (Doanh thu / Tiền thu) -->
+                <div class="col-12 col-sm-6 col-md-3 col-lg-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">
+                        <i class="bi bi-calendar-range me-1"></i>Từ ngày:
+                    </label>
+                    <input type="date" class="form-control form-control-sm" @bind="_filter.FromDate" />
+                </div>
+
+                <!-- Đến ngày (Doanh thu / Tiền thu) -->
+                <div class="col-12 col-sm-6 col-md-3 col-lg-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">
+                        <i class="bi bi-calendar-range-fill me-1"></i>Đến ngày:
+                    </label>
+                    <input type="date" class="form-control form-control-sm" @bind="_filter.ToDate" />
+                </div>
+
+                <!-- Khách hàng -->
+                <div class="col-12 col-sm-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">
+                        <i class="bi bi-person me-1"></i>Khách hàng:
+                    </label>
+                    <select class="form-select form-select-sm" @bind="_filter.CustomerId">
+                        <option value="">-- Tất cả khách hàng --</option>
+                        @foreach (var c in _customers)
+                        {
+                            <option value="@c.Id">[@c.Code] @c.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Trạng thái hóa đơn -->
+                <div class="col-12 col-sm-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">
+                        <i class="bi bi-tag me-1"></i>Trạng thái HĐ:
+                    </label>
+                    <select class="form-select form-select-sm" @bind="_filter.InvoiceStatus">
+                        <option value="All">Tất cả hóa đơn nợ</option>
+                        <option value="Unpaid">Chưa thanh toán</option>
+                        <option value="PartiallyPaid">Thanh toán 1 phần</option>
+                        <option value="Overdue">Quá hạn thanh toán</option>
+                        <option value="InDispute">Đang có tranh chấp</option>
+                    </select>
+                </div>
+
+                <!-- Nhóm tuổi nợ -->
+                <div class="col-12 col-sm-6 col-md-4 col-lg-1">
+                    <label class="form-label small fw-semibold text-muted mb-1">
+                        <i class="bi bi-clock me-1"></i>Tuổi nợ:
+                    </label>
+                    <select class="form-select form-select-sm" @bind="_filter.AgingBucket">
+                        <option value="All">Tất cả</option>
+                        <option value="Current">Trong hạn</option>
+                        <option value="1To30">1 - 30 ngày</option>
+                        <option value="31To60">31 - 60 ngày</option>
+                        <option value="61To90">61 - 90 ngày</option>
+                        <option value="Over90">&gt; 90 ngày</option>
+                    </select>
+                </div>
+
+                <!-- Nút thao tác lọc -->
+                <div class="col-12 col-sm-6 col-md-4 col-lg-1 d-flex gap-1">
+                    <button type="button" class="btn btn-primary btn-sm flex-grow-1" @onclick="ApplyFilter" disabled="@_loading" title="Áp dụng bộ lọc">
+                        <i class="bi bi-funnel-fill"></i> Lọc
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetFilter" disabled="@_loading" title="Đặt lại bộ lọc mặc định">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -38,10 +128,10 @@
 
     @if (_loading)
     {
-        <div class="card border-0 shadow-sm py-5 text-center my-4">
+        <div class="card border-0 shadow-sm py-5 text-center my-4 bg-white rounded-3">
             <div class="spinner-border text-primary mx-auto mb-3" style="width: 2.5rem; height: 2.5rem;" role="status"></div>
-            <div class="fw-semibold text-dark">Đang tổng hợp dữ liệu thời gian thực...</div>
-            <div class="small text-muted mt-1">Đang đối soát công nợ & phân tích tuổi nợ từ CSDL SQL Server</div>
+            <div class="fw-semibold text-dark">Đang kết xuất báo cáo và đối soát SQL Server...</div>
+            <div class="small text-muted mt-1">Tính toán KPI, phân tích nhóm tuổi nợ và sinh dự báo dòng tiền</div>
         </div>
     }
     else if (!string.IsNullOrEmpty(_errorMessage))
@@ -49,152 +139,255 @@
         <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center mb-4" role="alert">
             <i class="bi bi-exclamation-triangle-fill fs-3 me-3 text-danger"></i>
             <div>
-                <strong class="d-block mb-1">Lỗi kết nối hoặc xử lý dữ liệu:</strong>
+                <strong class="d-block mb-1">Lỗi xử lý dữ liệu:</strong>
                 <span>@_errorMessage</span>
             </div>
         </div>
     }
-    else
+    else if (_model != null)
     {
-        <!-- 4 KPI Summary Cards -->
+        <!-- 4 Thẻ KPI Tài Chính Cốt Lõi (Financial Core KPIs) -->
         <div class="row g-3 mb-4">
+            <!-- 1. Tổng Công Nợ Phải Thu -->
             <div class="col-12 col-sm-6 col-xl-3">
-                <DebtSummaryCard Title="Tổng công nợ" 
-                                  Amount="@_totalDebt" 
-                                  Icon="bi-wallet2" 
-                                  Subtitle="Toàn bộ dư nợ chưa thu" />
-            </div>
-            <div class="col-12 col-sm-6 col-xl-3">
-                <DebtSummaryCard Title="Nợ quá hạn (>30 ngày)" 
-                                  Amount="@_overdueDebt" 
-                                  Icon="bi-exclamation-octagon-fill" 
-                                  CardClass="border-start border-danger border-4" 
-                                  Subtitle="Cần ưu tiên nhắc nợ và thu hồi" />
-            </div>
-            <div class="col-12 col-sm-6 col-xl-3">
-                <div class="card h-100 card-hover-lift">
-                    <div class="card-body p-3 p-md-4 d-flex flex-column justify-content-between">
+                <div class="card h-100 border-0 shadow-sm rounded-3 p-3 bg-white border-start border-primary border-4 card-hover-lift">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.04em;">Khách hàng đang nợ</span>
-                                <div class="d-flex align-items-center justify-content-center rounded-3 bg-light text-warning border" style="width: 38px; height: 38px;">
-                                    <i class="bi bi-people-fill fs-5"></i>
-                                </div>
-                            </div>
-                            <div class="fs-4 fs-md-3 fw-bold text-dark mb-1 tabular-nums">
-                                @_indebtedCustomersCount <span class="fs-6 fw-normal text-muted">/ @_totalCustomersCount KH</span>
+                            <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.725rem; letter-spacing: 0.04em;">Tổng công nợ phải thu</span>
+                            <div class="fs-4 fw-bold text-dark mt-1 tabular-nums">
+                                @_model.Kpi.TotalArOutstanding.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.8rem;">đ</span>
                             </div>
                         </div>
-                        <div class="small text-muted mt-2 d-flex align-items-center gap-1" style="font-size: 0.775rem;">
-                            <i class="bi bi-pie-chart text-muted"></i>
-                            <span>Tỷ lệ có dư nợ: @(_totalCustomersCount > 0 ? (_indebtedCustomersCount * 100 / _totalCustomersCount) : 0)%</span>
+                        <div class="rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                            <i class="bi bi-wallet2 fs-5"></i>
                         </div>
+                    </div>
+                    <div class="small text-muted mt-2 d-flex justify-content-between align-items-center pt-2 border-top">
+                        <span><strong class="text-primary">@_model.Kpi.UnpaidInvoicesCount</strong> HĐ chưa thu</span>
+                        <span><strong class="text-dark">@_model.Kpi.IndebtedCustomersCount</strong> / @_model.Kpi.TotalCustomersCount KH</span>
                     </div>
                 </div>
             </div>
+
+            <!-- 2. Tổng Công Nợ Quá Hạn -->
             <div class="col-12 col-sm-6 col-xl-3">
-                <div class="card h-100 card-hover-lift">
-                    <div class="card-body p-3 p-md-4 d-flex flex-column justify-content-between">
+                <div class="card h-100 border-0 shadow-sm rounded-3 p-3 bg-white border-start border-danger border-4 card-hover-lift">
+                    <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.04em;">Hóa đơn chưa thu</span>
-                                <div class="d-flex align-items-center justify-content-center rounded-3 bg-light text-danger border" style="width: 38px; height: 38px;">
-                                    <i class="bi bi-receipt fs-5"></i>
-                                </div>
-                            </div>
-                            <div class="fs-4 fs-md-3 fw-bold text-dark mb-1 tabular-nums">
-                                @_unpaidInvoicesCount <span class="fs-6 fw-normal text-muted">chứng từ</span>
+                            <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.725rem; letter-spacing: 0.04em;">Tổng công nợ quá hạn</span>
+                            <div class="fs-4 fw-bold text-danger mt-1 tabular-nums">
+                                @_model.Kpi.TotalOverdueAr.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.8rem;">đ</span>
                             </div>
                         </div>
-                        <div class="small text-muted mt-2 d-flex align-items-center gap-1" style="font-size: 0.775rem;">
-                            <i class="bi bi-arrow-right-circle text-muted"></i>
-                            <span>Sẵn sàng cho phân bổ FIFO</span>
+                        <div class="rounded-3 bg-danger-subtle text-danger d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                            <i class="bi bi-exclamation-octagon-fill fs-5"></i>
                         </div>
+                    </div>
+                    <div class="small text-muted mt-2 d-flex justify-content-between align-items-center pt-2 border-top">
+                        <span>Tỷ lệ tiền: <strong class="text-danger">@_model.Kpi.OverdueValueRatio%</strong></span>
+                        <span>Số lượng: <strong class="text-danger">@_model.Kpi.OverdueInvoicesCount</strong> HĐ (@_model.Kpi.OverdueCountRatio%)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Dòng Tiền Thực Thu Trong Kỳ (Cash Collected) -->
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card h-100 border-0 shadow-sm rounded-3 p-3 bg-white border-start border-success border-4 card-hover-lift">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.725rem; letter-spacing: 0.04em;">Tiền thực thu trong kỳ</span>
+                            <div class="fs-4 fw-bold text-success mt-1 tabular-nums">
+                                @_model.Kpi.TotalCashCollectedInPeriod.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.8rem;">đ</span>
+                            </div>
+                        </div>
+                        <div class="rounded-3 bg-success-subtle text-success d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                            <i class="bi bi-cash-stack fs-5"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2 d-flex justify-content-between align-items-center pt-2 border-top">
+                        <span>Kỳ: @_filter.FromDate.ToString("dd/MM") - @_filter.ToDate.ToString("dd/MM")</span>
+                        <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Tiền đã vào quỹ</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Doanh Thu Xuất Bán & Chỉ Số DSO -->
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card h-100 border-0 shadow-sm rounded-3 p-3 bg-white border-start border-info border-4 card-hover-lift">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.725rem; letter-spacing: 0.04em;">Doanh thu kỳ &amp; DSO</span>
+                            <div class="fs-4 fw-bold text-dark mt-1 tabular-nums">
+                                @if (_model.Kpi.DsoDays.HasValue)
+                                {
+                                    <span>@_model.Kpi.DsoDays.Value <span class="small fw-normal text-muted" style="font-size: 0.85rem;">ngày (DSO)</span></span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted fs-5">N/A</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="rounded-3 bg-info-subtle text-info d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                            <i class="bi bi-hourglass-bottom fs-5"></i>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2 d-flex justify-content-between align-items-center pt-2 border-top">
+                        <span>Doanh thu kỳ: <strong class="text-dark">@_model.Kpi.TotalCreditSalesInPeriod.ToString("N0") đ</strong></span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 4 Nhóm tuổi nợ (Aging Buckets) -->
-        <div class="card mb-4">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <!-- Banner Minh Bạch Nghiệp Vụ: Phân định Doanh thu vs Phải thu vs Tiền thực thu (Quy tắc 2) -->
+        <div class="card border-0 shadow-sm rounded-3 mb-4 bg-light overflow-hidden">
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge bg-primary">QUY TẮC MINH BẠCH TÀI CHÍNH</span>
+                    <h6 class="fw-bold mb-0 text-dark">Đối chiếu Doanh thu Bán hàng • Khoản phải thu (AR) • Dòng tiền thực nhận (Cash Inflow)</h6>
+                </div>
+                <div class="row g-3 text-center pt-2">
+                    <div class="col-12 col-md-4">
+                        <div class="p-3 bg-white rounded-3 border">
+                            <span class="text-muted small fw-semibold text-uppercase">1. Doanh thu xuất hóa đơn (Sales)</span>
+                            <div class="fs-5 fw-bold text-primary my-1 tabular-nums">@_model.Kpi.TotalCreditSalesInPeriod.ToString("N0") đ</div>
+                            <span class="text-secondary small" style="font-size: 0.75rem;">Ghi nhận quyền đòi tiền theo kỳ bán hàng</span>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="p-3 bg-white rounded-3 border">
+                            <span class="text-muted small fw-semibold text-uppercase">2. Dòng tiền thực thu (Cash Collection)</span>
+                            <div class="fs-5 fw-bold text-success my-1 tabular-nums">@_model.Kpi.TotalCashCollectedInPeriod.ToString("N0") đ</div>
+                            <span class="text-secondary small" style="font-size: 0.75rem;">Tiền mặt/chuyển khoản đã nhận thực tế</span>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="p-3 bg-white rounded-3 border">
+                            <span class="text-muted small fw-semibold text-uppercase">3. Chênh lệch Dòng tiền / Doanh thu</span>
+                            @{
+                                var cashGap = _model.Kpi.TotalCashCollectedInPeriod - _model.Kpi.TotalCreditSalesInPeriod;
+                                var gapColor = cashGap >= 0 ? "text-success" : "text-danger";
+                            }
+                            <div class="fs-5 fw-bold @gapColor my-1 tabular-nums">
+                                @(cashGap >= 0 ? "+" : "")@cashGap.ToString("N0") đ
+                            </div>
+                            <span class="text-secondary small" style="font-size: 0.75rem;">
+                                @(cashGap >= 0 ? "Thu hồi vượt doanh số bán mới" : "Đang thâm hụt dòng tiền bán chịu")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(_model.Kpi.DsoExplanation))
+                {
+                    <div class="mt-3 p-2 px-3 bg-white rounded-3 border small text-muted">
+                        <i class="bi bi-info-circle-fill text-primary me-1"></i>
+                        <strong>Thuyết minh DSO:</strong> @_model.Kpi.DsoExplanation
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- 5 Nhóm Tuổi Nợ (Aging Distribution Buckets) -->
+        <div class="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2">
                     <span class="p-2 rounded-3 bg-primary-subtle text-primary">
                         <i class="bi bi-pie-chart-fill"></i>
                     </span>
                     <div>
-                        <h5 class="card-title mb-0 fw-bold text-dark" style="font-size: 0.95rem;">
-                            Phân bổ Tuổi nợ Hiện tại (Aging Buckets)
+                        <h5 class="card-title mb-0 fw-bold text-dark fs-6">
+                            Phân Bổ Công Nợ Theo Tuổi Nợ (AR Aging Buckets)
                         </h5>
-                        <span class="text-muted small" style="font-size: 0.75rem;">Phân loại rủi ro theo số ngày quá hạn thanh toán</span>
+                        <span class="text-muted small">Tính chuẩn theo ngày đến hạn DueDate đến mốc @_filter.AsOfDate.ToString("dd/MM/yyyy")</span>
                     </div>
                 </div>
                 <a href="aging-report" class="btn btn-outline-primary btn-sm">
-                    Xem báo cáo đầy đủ <i class="bi bi-arrow-right ms-1"></i>
+                    Xem Aging Report chi tiết <i class="bi bi-arrow-right ms-1"></i>
                 </a>
             </div>
             <div class="card-body p-3 p-md-4">
                 <div class="row g-3">
-                    <!-- 0 - 30 ngày -->
-                    <div class="col-12 col-sm-6 col-lg-3">
-                        <div class="p-3 rounded-3 border h-100 bg-white" style="border-top: 3px solid #10b981 !important;">
+                    <!-- Trong hạn -->
+                    <div class="col-12 col-sm-6 col-lg">
+                        <div class="p-3 rounded-3 border bg-white h-100" style="border-top: 4px solid #10b981 !important;">
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="small text-muted fw-bold">0–30 NGÀY</span>
-                                <span class="badge badge-soft-success">Trong hạn</span>
+                                <span class="small text-muted fw-bold">TRONG HẠN</span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Tốt</span>
                             </div>
                             <div class="fs-5 fw-bold text-dark my-1 tabular-nums">
-                                @_bucket0To30.ToString("N0") <span class="small fw-normal text-muted">đ</span>
+                                @_model.AgingBuckets.CurrentAmount.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.75rem;">đ</span>
                             </div>
-                            <div class="small text-muted" style="font-size: 0.75rem;">
-                                @(_totalDebt > 0 ? (_bucket0To30 / _totalDebt * 100).ToString("N1") : "0")% tổng dư nợ
+                            <div class="small text-muted d-flex justify-content-between">
+                                <span>@_model.AgingBuckets.CurrentCount HĐ</span>
+                                <span class="fw-bold text-success">@_model.AgingBuckets.CurrentPercentage%</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 31 - 60 ngày -->
-                    <div class="col-12 col-sm-6 col-lg-3">
-                        <div class="p-3 rounded-3 border h-100 bg-white" style="border-top: 3px solid #f59e0b !important;">
+                    <!-- Quá hạn 1 - 30 ngày -->
+                    <div class="col-12 col-sm-6 col-lg">
+                        <div class="p-3 rounded-3 border bg-white h-100" style="border-top: 4px solid #f59e0b !important;">
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="small text-muted fw-bold">31–60 NGÀY</span>
-                                <span class="badge badge-soft-warning">Nhắc nợ đợt 1</span>
+                                <span class="small text-muted fw-bold">QUÁ HẠN 1-30 NGÀY</span>
+                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Nhắc đợt 1</span>
                             </div>
                             <div class="fs-5 fw-bold text-dark my-1 tabular-nums">
-                                @_bucket31To60.ToString("N0") <span class="small fw-normal text-muted">đ</span>
+                                @_model.AgingBuckets.Overdue1To30Amount.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.75rem;">đ</span>
                             </div>
-                            <div class="small text-muted" style="font-size: 0.75rem;">
-                                @(_totalDebt > 0 ? (_bucket31To60 / _totalDebt * 100).ToString("N1") : "0")% tổng dư nợ
+                            <div class="small text-muted d-flex justify-content-between">
+                                <span>@_model.AgingBuckets.Overdue1To30Count HĐ</span>
+                                <span class="fw-bold text-warning">@_model.AgingBuckets.Overdue1To30Percentage%</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 61 - 90 ngày -->
-                    <div class="col-12 col-sm-6 col-lg-3">
-                        <div class="p-3 rounded-3 border h-100 bg-white" style="border-top: 3px solid #f97316 !important;">
+                    <!-- Quá hạn 31 - 60 ngày -->
+                    <div class="col-12 col-sm-6 col-lg">
+                        <div class="p-3 rounded-3 border bg-white h-100" style="border-top: 4px solid #f97316 !important;">
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="small text-muted fw-bold">61–90 NGÀY</span>
-                                <span class="badge badge-soft-warning">Quá hạn mức 2</span>
+                                <span class="small text-muted fw-bold">QUÁ HẠN 31-60 NGÀY</span>
+                                <span class="badge bg-warning text-dark">Kiên quyết</span>
                             </div>
                             <div class="fs-5 fw-bold text-dark my-1 tabular-nums">
-                                @_bucket61To90.ToString("N0") <span class="small fw-normal text-muted">đ</span>
+                                @_model.AgingBuckets.Overdue31To60Amount.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.75rem;">đ</span>
                             </div>
-                            <div class="small text-muted" style="font-size: 0.75rem;">
-                                @(_totalDebt > 0 ? (_bucket61To90 / _totalDebt * 100).ToString("N1") : "0")% tổng dư nợ
+                            <div class="small text-muted d-flex justify-content-between">
+                                <span>@_model.AgingBuckets.Overdue31To60Count HĐ</span>
+                                <span class="fw-bold text-warning">@_model.AgingBuckets.Overdue31To60Percentage%</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- > 90 ngày -->
-                    <div class="col-12 col-sm-6 col-lg-3">
-                        <div class="p-3 rounded-3 border h-100 bg-white" style="border-top: 3px solid #f43f5e !important;">
+                    <!-- Quá hạn 61 - 90 ngày -->
+                    <div class="col-12 col-sm-6 col-lg">
+                        <div class="p-3 rounded-3 border bg-white h-100" style="border-top: 4px solid #ef4444 !important;">
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="small text-danger fw-bold">&gt; 90 NGÀY</span>
-                                <span class="badge badge-soft-danger">Nợ khó đòi</span>
+                                <span class="small text-muted fw-bold">QUÁ HẠN 61-90 NGÀY</span>
+                                <span class="badge bg-danger text-white">Khẩn cấp</span>
+                            </div>
+                            <div class="fs-5 fw-bold text-dark my-1 tabular-nums">
+                                @_model.AgingBuckets.Overdue61To90Amount.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.75rem;">đ</span>
+                            </div>
+                            <div class="small text-muted d-flex justify-content-between">
+                                <span>@_model.AgingBuckets.Overdue61To90Count HĐ</span>
+                                <span class="fw-bold text-danger">@_model.AgingBuckets.Overdue61To90Percentage%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quá hạn > 90 ngày -->
+                    <div class="col-12 col-sm-6 col-lg">
+                        <div class="p-3 rounded-3 border bg-white h-100" style="border-top: 4px solid #991b1b !important;">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-danger fw-bold">QUÁ HẠN &gt; 90 NGÀY</span>
+                                <span class="badge bg-dark text-white">Nợ khó đòi</span>
                             </div>
                             <div class="fs-5 fw-bold text-danger my-1 tabular-nums">
-                                @_bucketOver90.ToString("N0") <span class="small fw-normal text-muted">đ</span>
+                                @_model.AgingBuckets.OverdueOver90Amount.ToString("N0") <span class="small fw-normal text-muted" style="font-size: 0.75rem;">đ</span>
                             </div>
-                            <div class="small text-muted" style="font-size: 0.75rem;">
-                                @(_totalDebt > 0 ? (_bucketOver90 / _totalDebt * 100).ToString("N1") : "0")% tổng dư nợ (Cần xử lý)
+                            <div class="small text-muted d-flex justify-content-between">
+                                <span>@_model.AgingBuckets.OverdueOver90Count HĐ</span>
+                                <span class="fw-bold text-danger">@_model.AgingBuckets.OverdueOver90Percentage%</span>
                             </div>
                         </div>
                     </div>
@@ -202,151 +395,357 @@
             </div>
         </div>
 
-        <!-- Top khách hàng công nợ cao & Hóa đơn gần đây -->
-        <div class="row g-4">
-            <!-- Top Khách hàng -->
-            <div class="col-12 col-lg-7">
-                <div class="card h-100">
-                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <!-- Dự Báo Thu Tiền Tương Lai (Cash Collection Forecast Model) & Xu hướng theo tháng -->
+        <div class="row g-4 mb-4">
+            <!-- Bảng Dự Báo Thu Tiền (Cash Collection Forecast) -->
+            <div class="col-12 col-xl-7">
+                <div class="card border-0 shadow-sm rounded-3 h-100 overflow-hidden">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="p-2 rounded-3 bg-warning-subtle text-warning">
-                                <i class="bi bi-trophy-fill"></i>
+                            <span class="p-2 rounded-3 bg-success-subtle text-success">
+                                <i class="bi bi-graph-up-arrow"></i>
                             </span>
-                            <h5 class="card-title mb-0 fw-bold text-dark" style="font-size: 0.95rem;">
-                                Top Khách hàng Dư nợ lớn nhất
-                            </h5>
+                            <div>
+                                <h5 class="card-title mb-0 fw-bold text-dark fs-6">
+                                    Dự Báo Dòng Tiền Thu Hồi Tương Lai (Cash Forecast)
+                                </h5>
+                                <span class="text-muted small">Mô hình trọng số xác suất thanh toán theo kỳ hạn nợ hợp đồng</span>
+                            </div>
                         </div>
-                        <a href="customers" class="btn btn-outline-secondary btn-sm">
-                            Xem tất cả <i class="bi bi-arrow-right ms-1"></i>
-                        </a>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                            Mô hình xác suất
+                        </span>
                     </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive border-0">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th>Kỳ dự báo</th>
+                                    <th class="text-center" style="width: 80px;">Số HĐ</th>
+                                    <th class="text-end" style="width: 140px;">Đáo hạn danh nghĩa</th>
+                                    <th class="text-center" style="width: 90px;">Xác suất</th>
+                                    <th class="text-end" style="width: 150px;">Dự kiến thu hồi</th>
+                                    <th class="text-center" style="width: 100px;">Độ tin cậy</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var f in _model.Forecasts)
+                                {
                                     <tr>
-                                        <th>Khách hàng</th>
-                                        <th class="text-end">Hạn mức</th>
-                                        <th class="text-end">Hiện đang nợ</th>
-                                        <th class="text-center" style="width: 140px;">Tỷ lệ sử dụng</th>
+                                        <td>
+                                            <div class="fw-bold text-dark">@f.PeriodLabel</div>
+                                            <div class="text-muted small" style="font-size: 0.725rem;">@f.DateRangeText</div>
+                                        </td>
+                                        <td class="text-center">@f.InvoiceCount</td>
+                                        <td class="text-end fw-semibold tabular-nums">@f.NominalDueAmount.ToString("N0") đ</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-light text-dark border">@((f.CollectionProbability * 100).ToString("N0"))%</span>
+                                        </td>
+                                        <td class="text-end fw-bold text-success tabular-nums">
+                                            @f.ExpectedCashInflow.ToString("N0") đ
+                                        </td>
+                                        <td class="text-center">
+                                            @if (f.ConfidenceLevel == "Cao")
+                                            {
+                                                <span class="badge bg-success">Cao</span>
+                                            }
+                                            else if (f.ConfidenceLevel == "Khá" || f.ConfidenceLevel == "Trung bình")
+                                            {
+                                                <span class="badge bg-info text-dark">@f.ConfidenceLevel</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">@f.ConfidenceLevel</span>
+                                            }
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    @if (_topDebtCustomers != null && _topDebtCustomers.Any())
-                                    {
-                                        var rank = 1;
-                                        @foreach (var c in _topDebtCustomers)
-                                        {
-                                            var percent = c.CreditLimit > 0 ? (int)Math.Min(100, (c.TotalDebt / c.CreditLimit * 100)) : 0;
-                                            var barColor = percent >= 90 ? "bg-danger" : (percent >= 70 ? "bg-warning" : "bg-primary");
-                                            <tr>
-                                                <td>
-                                                    <div class="d-flex align-items-center gap-2">
-                                                        <span class="badge rounded-circle p-1 d-flex align-items-center justify-content-center @(rank == 1 ? "bg-warning text-dark" : (rank == 2 ? "bg-secondary text-white" : "bg-light text-muted border"))" 
-                                                              style="width: 22px; height: 22px; font-size: 0.7rem;">
-                                                            @rank
-                                                        </span>
-                                                        <div>
-                                                            <a href="customers/@c.CustomerId" class="fw-bold text-dark text-decoration-none d-block" style="font-size: 0.85rem;">
-                                                                @c.CustomerName
-                                                            </a>
-                                                            <span class="small text-muted" style="font-size: 0.75rem;">[@c.CustomerCode]</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td class="text-end text-muted tabular-nums">@c.CreditLimit.ToString("N0") đ</td>
-                                                <td class="text-end fw-bold text-danger tabular-nums">@c.TotalDebt.ToString("N0") đ</td>
-                                                <td class="text-center">
-                                                    <div class="d-flex align-items-center justify-content-center gap-2">
-                                                        <div class="credit-bar-wrapper flex-grow-1" style="height: 6px;">
-                                                            <div class="credit-bar-fill @barColor" style="width: @percent%"></div>
-                                                        </div>
-                                                        <span class="small fw-bold text-muted tabular-nums" style="font-size: 0.75rem;">@percent%</span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            rank++;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <tr>
-                                            <td colspan="4" class="text-center text-muted py-4">
-                                                <i class="bi bi-check-circle text-success me-1"></i>Không có khách hàng nào đang nợ.
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                                }
+                            </tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td>TỔNG DỰ KIẾN THU HỒI:</td>
+                                    <td class="text-center">@_model.Forecasts.Sum(f => f.InvoiceCount)</td>
+                                    <td class="text-end text-dark tabular-nums">@_model.Forecasts.Sum(f => f.NominalDueAmount).ToString("N0") đ</td>
+                                    <td></td>
+                                    <td class="text-end text-success fs-6 tabular-nums">@_model.Forecasts.Sum(f => f.ExpectedCashInflow).ToString("N0") đ</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="card-footer bg-light p-3 small text-muted border-top">
+                        <i class="bi bi-shield-exclamation text-warning me-1"></i>
+                        <strong>Tuyên bố phương pháp &amp; Miễn trừ:</strong> Dự báo dựa trên kỳ hạn hóa đơn và tốc độ trả nợ lịch sử. Tuyệt đối không đánh đồng với dòng tiền đã thu thực tế.
                     </div>
                 </div>
             </div>
 
-            <!-- Hóa đơn chưa thanh toán gần đây -->
-            <div class="col-12 col-lg-5">
-                <div class="card h-100">
-                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <!-- Xu Hướng Thu Tiền 6 Tháng Gần Nhất -->
+            <div class="col-12 col-xl-5">
+                <div class="card border-0 shadow-sm rounded-3 h-100 overflow-hidden">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-2">
                             <span class="p-2 rounded-3 bg-info-subtle text-info">
-                                <i class="bi bi-clock-history"></i>
+                                <i class="bi bi-bar-chart-line-fill"></i>
                             </span>
-                            <h5 class="card-title mb-0 fw-bold text-dark" style="font-size: 0.95rem;">
-                                Hóa đơn chờ thanh toán
+                            <h5 class="card-title mb-0 fw-bold text-dark fs-6">
+                                Xu Hướng Dòng Tiền Theo Tháng (6 Tháng)
                             </h5>
                         </div>
-                        <a href="invoices" class="btn btn-outline-secondary btn-sm">
-                            Tất cả HĐ <i class="bi bi-arrow-right ms-1"></i>
-                        </a>
                     </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive border-0">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th>Tháng</th>
+                                    <th class="text-end">Doanh số xuất</th>
+                                    <th class="text-end">Thực thu</th>
+                                    <th class="text-end">Chênh lệch</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in _model.MonthlyTrends)
+                                {
                                     <tr>
-                                        <th>Số HĐ</th>
-                                        <th class="text-end">Số tiền</th>
-                                        <th class="text-center">Trạng thái</th>
+                                        <td class="fw-semibold text-dark">@m.Label</td>
+                                        <td class="text-end text-muted tabular-nums">@m.InvoicedAmount.ToString("N0") đ</td>
+                                        <td class="text-end fw-bold text-success tabular-nums">@m.CashCollectedAmount.ToString("N0") đ</td>
+                                        <td class="text-end tabular-nums @(m.NetCashGap >= 0 ? "text-success fw-bold" : "text-danger")">
+                                            @(m.NetCashGap >= 0 ? "+" : "")@m.NetCashGap.ToString("N0") đ
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    @if (_recentUnpaidInvoices != null && _recentUnpaidInvoices.Any())
-                                    {
-                                        @foreach (var inv in _recentUnpaidInvoices)
-                                        {
-                                            <tr>
-                                                <td>
-                                                    <a href="invoices/@inv.Id" class="fw-bold text-dark text-decoration-none d-block">
-                                                        @inv.InvoiceNumber
-                                                    </a>
-                                                    <span class="small text-muted" style="font-size: 0.75rem;">
-                                                        <i class="bi bi-calendar3 me-1"></i>@inv.InvoiceDate.ToString("dd/MM/yyyy")
-                                                    </span>
-                                                </td>
-                                                <td class="text-end fw-bold text-dark tabular-nums">
-                                                    @inv.TotalAmount.ToString("N0") đ
-                                                </td>
-                                                <td class="text-center">
-                                                    <InvoiceStatusBadge Status="@inv.Status" />
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <tr>
-                                            <td colspan="3" class="text-center text-muted py-4">
-                                                <i class="bi bi-check-circle-fill text-success fs-5 d-block mb-1"></i>
-                                                <span>Tuyệt vời! Tất cả hóa đơn đã thanh toán xong.</span>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer bg-white p-3 small text-muted border-top d-flex justify-content-between">
+                        <span>Doanh số 6 tháng: <strong>@_model.MonthlyTrends.Sum(t => t.InvoicedAmount).ToString("N0") đ</strong></span>
+                        <span class="text-success">Thực thu: <strong>@_model.MonthlyTrends.Sum(t => t.CashCollectedAmount).ToString("N0") đ</strong></span>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Top Khách Hàng Nợ Nhiều Nhất -->
+        <div class="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="p-2 rounded-3 bg-warning-subtle text-warning">
+                        <i class="bi bi-trophy-fill"></i>
+                    </span>
+                    <div>
+                        <h5 class="card-title mb-0 fw-bold text-dark fs-6">
+                            Top Khách Hàng Có Dư Nợ Cao Nhất Toàn Hệ Thống
+                        </h5>
+                        <span class="text-muted small">Cảnh báo rủi ro vượt hạn mức tín dụng và nợ quá hạn kéo dài</span>
+                    </div>
+                </div>
+                <a href="customers" class="btn btn-outline-secondary btn-sm">
+                    Quản lý khách hàng <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small">
+                        <tr>
+                            <th style="width: 50px;" class="text-center">#</th>
+                            <th style="min-width: 220px;">Khách hàng</th>
+                            <th class="text-end" style="width: 140px;">Hạn mức</th>
+                            <th class="text-end" style="width: 150px;">Tổng dư nợ</th>
+                            <th class="text-end" style="width: 140px;">Nợ quá hạn</th>
+                            <th style="width: 180px;" class="text-center">Tỷ lệ dùng hạn mức</th>
+                            <th class="text-center" style="width: 110px;">Tỷ trọng</th>
+                            <th class="text-center" style="width: 100px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ var rank = 1; }
+                        @foreach (var c in _model.TopDebtors)
+                        {
+                            var usage = c.CreditUtilizationRate;
+                            var barClass = usage >= 90 ? "bg-danger" : (usage >= 70 ? "bg-warning" : "bg-primary");
+                            <tr>
+                                <td class="text-center font-monospace fw-bold text-muted">@rank</td>
+                                <td>
+                                    <a href="customers/@c.CustomerId" class="fw-bold text-dark text-decoration-none d-block">
+                                        <span class="badge bg-light text-dark border me-1 font-monospace">@c.CustomerCode</span>
+                                        @c.CustomerName
+                                    </a>
+                                    <div class="text-muted small" style="font-size: 0.725rem;">
+                                        @c.UnpaidInvoiceCount hóa đơn chưa thu (@c.OverdueInvoiceCount quá hạn)
+                                    </div>
+                                </td>
+                                <td class="text-end text-muted tabular-nums">@c.CreditLimit.ToString("N0") đ</td>
+                                <td class="text-end fw-bold text-dark tabular-nums">@c.TotalDebt.ToString("N0") đ</td>
+                                <td class="text-end tabular-nums @(c.OverdueDebt > 0 ? "text-danger fw-bold" : "text-muted")">
+                                    @c.OverdueDebt.ToString("N0") đ
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-flex align-items-center justify-content-center gap-2">
+                                        <div class="progress flex-grow-1" style="height: 6px;">
+                                            <div class="progress-bar @barClass" style="width: @Math.Min(100, usage)%"></div>
+                                        </div>
+                                        <span class="small fw-semibold tabular-nums" style="font-size: 0.75rem; width: 40px;">@usage%</span>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-dark border">@c.DebtSharePercentage%</span>
+                                </td>
+                                <td class="text-center">
+                                    <a href="customers/@c.CustomerId" class="btn btn-outline-primary btn-sm py-0 px-2" title="Chi tiết công nợ">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            rank++;
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Danh Sách Hóa Đơn Chi Tiết & Phân Trang Server-side (Quy tắc 7 & 8) -->
+        <div class="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="p-2 rounded-3 bg-secondary-subtle text-secondary">
+                        <i class="bi bi-receipt-cutoff"></i>
+                    </span>
+                    <div>
+                        <h5 class="card-title mb-0 fw-bold text-dark fs-6">
+                            Danh Sách Hóa Đơn Chờ Thu Hồi (Phân trang SQL Server)
+                        </h5>
+                        <span class="text-muted small">
+                            Tìm thấy <strong>@_model.Invoices.TotalCount</strong> hóa đơn phù hợp với tiêu chí lọc
+                        </span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small">Hiển thị:</span>
+                    <select class="form-select form-select-sm" style="width: 80px;" @onchange="OnPageSizeChanged">
+                        <option value="10" selected="@(_filter.PageSize == 10)">10</option>
+                        <option value="25" selected="@(_filter.PageSize == 25)">25</option>
+                        <option value="50" selected="@(_filter.PageSize == 50)">50</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small">
+                        <tr>
+                            <th style="min-width: 140px;">Số HĐ</th>
+                            <th style="min-width: 220px;">Khách hàng</th>
+                            <th style="width: 110px;" class="text-center">Ngày lập</th>
+                            <th style="width: 110px;" class="text-center">Hạn TT</th>
+                            <th style="width: 130px;" class="text-end">Tổng tiền</th>
+                            <th style="width: 130px;" class="text-end">Đã thu</th>
+                            <th style="width: 140px;" class="text-end">Còn phải thu</th>
+                            <th style="width: 150px;" class="text-center">Nhóm tuổi nợ</th>
+                            <th style="width: 110px;" class="text-center">Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_model.Invoices.Items.Any())
+                        {
+                            @foreach (var inv in _model.Invoices.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="invoices/@inv.Id" class="fw-bold text-dark text-decoration-none">
+                                            @inv.InvoiceNumber
+                                        </a>
+                                        @if (inv.IsInDispute)
+                                        {
+                                            <span class="badge bg-danger ms-1" title="@inv.DisputeReason">Tranh chấp</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <a href="customers/@inv.CustomerId" class="text-dark text-decoration-none fw-semibold">
+                                            @inv.CustomerName
+                                        </a>
+                                        <div class="text-muted small" style="font-size: 0.725rem;">[@inv.CustomerCode]</div>
+                                    </td>
+                                    <td class="text-center small text-muted">@inv.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="text-center small text-muted">@inv.DueDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="text-end text-muted tabular-nums">@inv.TotalAmount.ToString("N0") đ</td>
+                                    <td class="text-end text-success tabular-nums">@inv.PaidAmount.ToString("N0") đ</td>
+                                    <td class="text-end fw-bold text-danger tabular-nums">@inv.RemainingAmount.ToString("N0") đ</td>
+                                    <td class="text-center">
+                                        @if (inv.DaysOverdue <= 0)
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle">Trong hạn</span>
+                                        }
+                                        else if (inv.DaysOverdue <= 30)
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Quá hạn @inv.DaysOverdue đ</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">Quá hạn @inv.DaysOverdue đ</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <InvoiceStatusBadge Status="@inv.Status" />
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="9" class="text-center py-4 text-muted">
+                                    <i class="bi bi-inbox display-6 d-block mb-2 text-muted"></i>
+                                    Không tìm thấy hóa đơn nào phù hợp với điều kiện lọc hiện tại.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Phân trang (Pagination Bar) -->
+            @if (_model.Invoices.TotalPages > 1)
+            {
+                <div class="card-footer bg-white py-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span class="small text-muted">
+                        Trang <strong>@_model.Invoices.PageIndex</strong> / <strong>@_model.Invoices.TotalPages</strong>
+                        (Hiển thị @_model.Invoices.Items.Count trên tổng số @_model.Invoices.TotalCount hóa đơn)
+                    </span>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(!_model.Invoices.HasPreviousPage ? "disabled" : "")">
+                            <button type="button" class="page-link" @onclick="() => GoToPage(1)" title="Trang đầu">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </button>
+                        </li>
+                        <li class="page-item @(!_model.Invoices.HasPreviousPage ? "disabled" : "")">
+                            <button type="button" class="page-link" @onclick="() => GoToPage(_model.Invoices.PageIndex - 1)">
+                                Trước
+                            </button>
+                        </li>
+
+                        @for (int i = Math.Max(1, _model.Invoices.PageIndex - 2); i <= Math.Min(_model.Invoices.TotalPages, _model.Invoices.PageIndex + 2); i++)
+                        {
+                            var pageNum = i;
+                            <li class="page-item @(pageNum == _model.Invoices.PageIndex ? "active" : "")">
+                                <button type="button" class="page-link" @onclick="() => GoToPage(pageNum)">
+                                    @pageNum
+                                </button>
+                            </li>
+                        }
+
+                        <li class="page-item @(!_model.Invoices.HasNextPage ? "disabled" : "")">
+                            <button type="button" class="page-link" @onclick="() => GoToPage(_model.Invoices.PageIndex + 1)">
+                                Sau
+                            </button>
+                        </li>
+                        <li class="page-item @(!_model.Invoices.HasNextPage ? "disabled" : "")">
+                            <button type="button" class="page-link" @onclick="() => GoToPage(_model.Invoices.TotalPages)" title="Trang cuối">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            }
         </div>
     }
 </div>
@@ -355,54 +754,69 @@
     private bool _loading = true;
     private string? _errorMessage;
 
-    private decimal _totalDebt;
-    private decimal _overdueDebt;
-    private int _indebtedCustomersCount;
-    private int _totalCustomersCount;
-    private int _unpaidInvoicesCount;
-
-    private decimal _bucket0To30;
-    private decimal _bucket31To60;
-    private decimal _bucket61To90;
-    private decimal _bucketOver90;
-
-    private IEnumerable<AgingReportItem>? _topDebtCustomers;
-    private IEnumerable<Invoice>? _recentUnpaidInvoices;
+    private ArDashboardFilterDto _filter = new();
+    private ArDashboardViewModel? _model;
+    private List<Customer> _customers = new();
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var agingSummary = await GetAgingReportUseCase.ExecuteAsync(DateTime.Now);
-            var allInvoices = await ViewInvoicesUseCase.ExecuteAsync();
-            var allCustomers = await ViewCustomersUseCase.ExecuteAsync();
-
-            _totalDebt = agingSummary.TotalDebt;
-            _bucket0To30 = agingSummary.Total0To30;
-            _bucket31To60 = agingSummary.Total31To60;
-            _bucket61To90 = agingSummary.Total61To90;
-            _bucketOver90 = agingSummary.TotalOver90;
-            _overdueDebt = _bucket31To60 + _bucket61To90 + _bucketOver90;
-
-            _totalCustomersCount = allCustomers.Count();
-            _indebtedCustomersCount = agingSummary.Items.Count(i => i.TotalDebt > 0);
-
-            var unpaid = allInvoices.Where(i => i.Status != "Paid" && i.Status != "Cancelled").ToList();
-            _unpaidInvoicesCount = unpaid.Count;
-            _recentUnpaidInvoices = unpaid.Take(5);
-
-            _topDebtCustomers = agingSummary.Items
-                .Where(i => i.TotalDebt > 0)
-                .OrderByDescending(i => i.TotalDebt)
-                .Take(5);
+            _customers = (await ViewCustomersUseCase.ExecuteAsync()).Where(c => c.IsActive).OrderBy(c => c.Name).ToList();
+            await LoadDashboardData();
         }
         catch (Exception ex)
         {
-            _errorMessage = ex.Message;
+            _errorMessage = $"Lỗi khởi tạo dashboard: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    private async Task LoadDashboardData()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        try
+        {
+            _model = await DashboardUseCase.ExecuteAsync(_filter);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Không thể tổng hợp báo cáo quản trị: {ex.Message}";
         }
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task ApplyFilter()
+    {
+        _filter.PageIndex = 1; // Reset về trang 1 khi lọc lại
+        await LoadDashboardData();
+    }
+
+    private async Task ResetFilter()
+    {
+        _filter = new ArDashboardFilterDto();
+        await LoadDashboardData();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (_model == null || page < 1 || page > _model.Invoices.TotalPages) return;
+        _filter.PageIndex = page;
+        await LoadDashboardData();
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            _filter.PageSize = size;
+            _filter.PageIndex = 1;
+            await LoadDashboardData();
         }
     }
 }

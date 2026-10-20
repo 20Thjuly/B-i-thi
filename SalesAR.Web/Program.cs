@@ -12,6 +12,8 @@ using SalesAR.UseCases.PluginInterfaces;
 using SalesAR.UseCases.Products;
 using SalesAR.UseCases.Reminders;
 using SalesAR.Plugins.Reminders;
+using SalesAR.UseCases.Dashboard;
+using SalesAR.Plugins.Dashboard;
 using SalesAR.Web.Auth;
 using SalesAR.Web.Components;
 using SalesAR.Web.Services;
@@ -118,6 +120,10 @@ builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddSingleton<BackgroundReminderJobScheduler>();
 builder.Services.AddSingleton<IBackgroundJobScheduler>(sp => sp.GetRequiredService<BackgroundReminderJobScheduler>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BackgroundReminderJobScheduler>());
+
+// 12. AR Dashboard & Cash Collection Forecast (Part 7)
+builder.Services.AddScoped<IArDashboardRepository, ArDashboardRepository>();
+builder.Services.AddScoped<IArDashboardUseCase, ArDashboardUseCase>();
 
 var app = builder.Build();
 
