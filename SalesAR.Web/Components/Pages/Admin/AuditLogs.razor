@@ -1,0 +1,323 @@
+@page "/admin/audit-logs"
+@attribute [Authorize(Roles = "ADMIN,CREDIT_MANAGER")]
+@using SalesAR.CoreBusiness.Models
+@using SalesAR.UseCases.PluginInterfaces
+@inject IAuditLogRepository AuditLogRepository
+@inject NavigationManager Navigation
+
+<PageTitle>Nhật ký Kiểm toán (Audit Logs) - SalesAR</PageTitle>
+
+<div class="container-fluid px-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-journal-text text-primary me-2"></i>Nhật Ký Kiểm Toán Hệ Thống (Audit Logs)
+            </h1>
+            <p class="text-muted small mb-0">Theo dõi toàn bộ các thao tác nhạy cảm, thay đổi dữ liệu, người thực hiện và lý do thay đổi theo chuẩn tuân thủ tài chính</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-primary btn-sm shadow-sm" @onclick="LoadData" disabled="@_isLoading">
+                <i class="bi bi-arrow-clockwise me-1"></i> Làm mới
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-center">
+                <!-- Lọc Bảng -->
+                <div class="col-12 col-sm-6 col-md-3">
+                    <label class="form-label small fw-semibold text-muted mb-1">Bảng / Thực thể:</label>
+                    <select class="form-select form-select-sm" @bind="_filter.TableName">
+                        <option value="All">-- Tất cả thực thể --</option>
+                        @foreach (var table in _tables)
+                        {
+                            <option value="@table">@table</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Lọc Thao tác -->
+                <div class="col-12 col-sm-6 col-md-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">Thao tác (Action):</label>
+                    <select class="form-select form-select-sm" @bind="_filter.Action">
+                        <option value="All">-- Tất cả thao tác --</option>
+                        @foreach (var act in _actions)
+                        {
+                            <option value="@act">@act</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Người thực hiện -->
+                <div class="col-12 col-sm-6 col-md-3">
+                    <label class="form-label small fw-semibold text-muted mb-1">Người thực hiện (User):</label>
+                    <input type="text" class="form-control form-control-sm" placeholder="Tìm theo username..." @bind="_filter.ChangedBy" />
+                </div>
+
+                <!-- Khoảng thời gian -->
+                <div class="col-12 col-sm-6 col-md-2">
+                    <label class="form-label small fw-semibold text-muted mb-1">Từ ngày:</label>
+                    <input type="date" class="form-control form-control-sm" @bind="_filter.FromDate" />
+                </div>
+
+                <div class="col-12 col-md-2 text-md-end mt-md-4">
+                    <button class="btn btn-primary btn-sm w-100 shadow-sm" @onclick="ApplyFilter" disabled="@_isLoading">
+                        <i class="bi bi-funnel-fill me-1"></i> Lọc dữ liệu
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Logs -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-dark">
+                Danh Sách Sự Kiện Kiểm Toán (@_pagedData.TotalCount sự kiện)
+            </h5>
+            <span class="badge bg-light text-dark border">
+                Trang @_pagedData.PageIndex / @Math.Max(1, _pagedData.TotalPages)
+            </span>
+        </div>
+
+        <div class="card-body p-0">
+            @if (_isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="text-muted small mt-2">Đang tải nhật ký kiểm toán từ SQL Server...</p>
+                </div>
+            }
+            else if (_pagedData.Items == null || !_pagedData.Items.Any())
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-journal-x display-4 text-secondary mb-3 d-block"></i>
+                    <p class="mb-0">Không tìm thấy bản ghi kiểm toán nào phù hợp với bộ lọc hiện tại.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light small">
+                            <tr>
+                                <th>#ID</th>
+                                <th>Thời Điểm</th>
+                                <th>Người Thực Hiện</th>
+                                <th>Thực Thể</th>
+                                <th>Record ID</th>
+                                <th class="text-center">Hành Động</th>
+                                <th>Lý Do / Ghi Chú</th>
+                                <th class="text-center">Chi Tiết</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in _pagedData.Items)
+                            {
+                                <tr>
+                                    <td class="fw-bold text-muted">#@log.Id</td>
+                                    <td class="text-nowrap small">
+                                        <i class="bi bi-clock me-1 text-muted"></i>@log.ChangedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                                    </td>
+                                    <td class="fw-semibold">
+                                        <span class="badge bg-light text-dark border"><i class="bi bi-person me-1"></i>@log.ChangedBy</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-primary">@log.TableName</span>
+                                    </td>
+                                    <td>
+                                        @(log.RecordId > 0 ? $"#{log.RecordId}" : "-")
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge @GetActionBadgeClass(log.Action)">@log.Action</span>
+                                    </td>
+                                    <td class="small text-truncate" style="max-width: 250px;" title="@log.Reason">
+                                        @(string.IsNullOrWhiteSpace(log.Reason) ? "-" : log.Reason)
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-info btn-sm py-0 px-2" @onclick="() => OpenDetailModal(log)" title="Xem chi tiết thay đổi dữ liệu">
+                                            <i class="bi bi-eye"></i> Xem
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Phân trang -->
+                @if (_pagedData.TotalPages > 1)
+                {
+                    <div class="card-footer bg-white border-0 py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="small text-muted">
+                            Hiển thị từ @((_pagedData.PageIndex - 1) * _pagedData.PageSize + 1) đến @Math.Min(_pagedData.PageIndex * _pagedData.PageSize, _pagedData.TotalCount) trong tổng số @_pagedData.TotalCount bản ghi
+                        </div>
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item @(_pagedData.PageIndex <= 1 ? "disabled" : "")">
+                                <button class="page-link" @onclick="() => GoToPage(_pagedData.PageIndex - 1)">&laquo; Trước</button>
+                            </li>
+                            @for (int i = 1; i <= _pagedData.TotalPages; i++)
+                            {
+                                int pageNum = i;
+                                <li class="page-item @(pageNum == _pagedData.PageIndex ? "active" : "")">
+                                    <button class="page-link" @onclick="() => GoToPage(pageNum)">@pageNum</button>
+                                </li>
+                            }
+                            <li class="page-item @(_pagedData.PageIndex >= _pagedData.TotalPages ? "disabled" : "")">
+                                <button class="page-link" @onclick="() => GoToPage(_pagedData.PageIndex + 1)">Sau &raquo;</button>
+                            </li>
+                        </ul>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal Chi Tiết Audit Log -->
+@if (_selectedLog != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark">
+                            <i class="bi bi-shield-check text-success me-2"></i>Chi Tiết Sự Kiện Kiểm Toán #@_selectedLog.Id
+                        </h5>
+                        <div class="small text-muted">
+                            Thực thể: <strong>@_selectedLog.TableName</strong> (ID: @_selectedLog.RecordId) | Hành động: <span class="badge @GetActionBadgeClass(_selectedLog.Action)">@_selectedLog.Action</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" @onclick="CloseDetailModal"></button>
+                </div>
+                <div class="modal-body py-3">
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <div class="p-2 bg-light rounded border">
+                                <div class="text-muted small">Người thực hiện:</div>
+                                <div class="fw-bold">@_selectedLog.ChangedBy</div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="p-2 bg-light rounded border">
+                                <div class="text-muted small">Thời điểm ghi nhận:</div>
+                                <div class="fw-bold">@_selectedLog.ChangedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_selectedLog.Reason))
+                    {
+                        <div class="p-2 bg-light rounded border mb-3">
+                            <div class="text-muted small">Lý do / Căn cứ nghiệp vụ:</div>
+                            <div class="fw-semibold text-dark">@_selectedLog.Reason</div>
+                        </div>
+                    }
+
+                    <div class="row g-3">
+                        <!-- Giá trị cũ -->
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Dữ liệu trước thay đổi (Old Values):</label>
+                            <div class="p-3 bg-light rounded border font-monospace small" style="white-space: pre-wrap; word-break: break-all; min-height: 120px; max-height: 300px; overflow-y: auto;">
+                                @(string.IsNullOrWhiteSpace(_selectedLog.OldValues) ? "(Không có / Bản ghi tạo mới)" : _selectedLog.OldValues)
+                            </div>
+                        </div>
+
+                        <!-- Giá trị mới -->
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Dữ liệu sau thay đổi (New Values):</label>
+                            <div class="p-3 bg-light rounded border font-monospace small text-primary" style="white-space: pre-wrap; word-break: break-all; min-height: 120px; max-height: 300px; overflow-y: auto;">
+                                @(string.IsNullOrWhiteSpace(_selectedLog.NewValues) ? "(Không có / Bản ghi đã xóa)" : _selectedLog.NewValues)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary px-4" @onclick="CloseDetailModal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private AuditLogFilterDto _filter = new();
+    private PagedAuditLogsDto _pagedData = new();
+    private List<string> _tables = new();
+    private List<string> _actions = new();
+    private AuditLog? _selectedLog;
+    private bool _isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMetadata();
+        await LoadData();
+    }
+
+    private async Task LoadMetadata()
+    {
+        try
+        {
+            var tables = await AuditLogRepository.GetDistinctTablesAsync();
+            _tables = tables.ToList();
+
+            var actions = await AuditLogRepository.GetDistinctActionsAsync();
+            _actions = actions.ToList();
+        }
+        catch
+        {
+            // Bỏ qua lỗi metadata nếu bảng trống
+        }
+    }
+
+    private async Task LoadData()
+    {
+        _isLoading = true;
+        try
+        {
+            _pagedData = await AuditLogRepository.GetPagedLogsAsync(_filter);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ApplyFilter()
+    {
+        _filter.PageIndex = 1;
+        await LoadData();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (page < 1 || page > _pagedData.TotalPages) return;
+        _filter.PageIndex = page;
+        await LoadData();
+    }
+
+    private void OpenDetailModal(AuditLog log)
+    {
+        _selectedLog = log;
+    }
+
+    private void CloseDetailModal()
+    {
+        _selectedLog = null;
+    }
+
+    private string GetActionBadgeClass(string action) => action switch
+    {
+        "INSERT" => "bg-success",
+        "UPDATE" => "bg-primary",
+        "DELETE" => "bg-danger",
+        "APPROVE" => "bg-success",
+        "REJECT" => "bg-danger",
+        "STATUS_CHANGE" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+}

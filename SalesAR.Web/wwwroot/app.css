@@ -481,3 +481,64 @@ a:hover {
     font-size: 0.85rem;
 }
 
+/* ==========================================================================
+   Mobile Optimization (390px Viewport - iPhone / Small Android)
+   ========================================================================== */
+@media (max-width: 480px) {
+    body {
+        font-size: 0.875rem;
+    }
+
+    .container, .container-fluid {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+
+    .card {
+        border-radius: 0.75rem !important;
+    }
+
+    .card-body {
+        padding: 1rem !important;
+    }
+
+    /* Stack filter bars and controls */
+    .filter-bar, .search-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    /* Full width buttons on small screens */
+    .btn-mobile-full {
+        width: 100% !important;
+    }
+
+    /* Ensure table container scrolls smoothly on 390px */
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+        margin-bottom: 0.5rem;
+    }
+
+    /* KPI Cards display numbers nicely without truncation */
+    .fs-2, .fs-3 {
+        font-size: 1.35rem !important;
+    }
+
+    .display-3 {
+        font-size: 2.25rem !important;
+    }
+
+    /* Pagination controls shrink to fit 390px */
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+
+    .modal-dialog {
+        margin: 0.25rem !important;
+        max-width: calc(100vw - 0.5rem) !important;
+    }
+}
+
+
