@@ -1,0 +1,829 @@
+@page "/ai-assistance"
+@page "/ai-assistant"
+@attribute [Authorize(Roles = "ADMIN,ACCOUNTANT,SALES")]
+@using System.Security.Claims
+@using SalesAR.CoreBusiness.Models
+@using SalesAR.UseCases.AI
+@using SalesAR.UseCases.AI.Models
+@using SalesAR.UseCases.AI.Providers
+@using SalesAR.UseCases.PluginInterfaces
+@using SalesAR.UseCases.Reminders
+@using SalesAR.UseCases.Reminders.Models
+@inject ICustomerRepository CustomerRepository
+@inject ICustomerArSummaryUseCase CustomerSummaryUseCase
+@inject ICreditRiskAssessmentService CreditRiskAssessmentService
+@inject IReminderDraftGenerator ReminderDraftGenerator
+@inject IReminderService ReminderService
+@inject IAIProvider AiProvider
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Trợ lý AI Công nợ - SalesAR</PageTitle>
+
+<div class="container-fluid px-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-robot text-primary me-2"></i>Trợ lý AI Quản trị Công nợ (AI Assistant for AR)
+            </h1>
+            <p class="text-muted small mb-0">Hỗ trợ phân tích sức khỏe công nợ, chấm điểm rủi ro minh bạch và soạn thảo thư nhắc nợ dựa trên 100% dữ liệu SQL Server</p>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <!-- Badge trạng thái AI Provider -->
+            <div class="badge @(AiProvider.IsConfigured ? "bg-success-subtle text-success border border-success" : "bg-warning-subtle text-warning border border-warning") p-2 rounded shadow-sm d-flex align-items-center gap-1">
+                <i class="bi @(AiProvider.IsConfigured ? "bi-check-circle-fill" : "bi-shield-check")"></i>
+                <span>@(AiProvider.IsConfigured ? "Gemini 1.5 Flash (Online)" : "Local Heuristic Engine (100% Sẵn Sàng)")</span>
+            </div>
+
+            <button class="btn btn-outline-secondary btn-sm shadow-sm" @onclick="RefreshAll" disabled="@_isLoading">
+                <i class="bi bi-arrow-clockwise me-1"></i> Làm mới
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert thông báo -->
+    @if (!string.IsNullOrEmpty(_alertMessage))
+    {
+        <div class="alert @_alertClass alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi bi-info-circle-fill me-2"></i>@_alertMessage
+            <button type="button" class="btn-close" @onclick="() => _alertMessage = null"></button>
+        </div>
+    }
+
+    <!-- Selector Bar: Chọn khách hàng -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4" style="background: linear-gradient(135deg, #f8faff 0%, #ffffff 100%); border-left: 4px solid #3b82f6 !important;">
+        <div class="card-body p-3">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-5">
+                    <label class="form-label small fw-semibold text-muted mb-1">Chọn Khách Hàng Cần Phân Tích &amp; Hỗ Trợ:</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0 text-primary"><i class="bi bi-building"></i></span>
+                        <select class="form-select border-start-0" value="@_selectedCustomerId" @onchange="OnCustomerSelected">
+                            @foreach (var c in _customers)
+                            {
+                                <option value="@c.Id">@c.Code - @c.Name (Hạn mức: @c.CreditLimit.ToString("N0") đ)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-muted mb-1">Trạng thái đối soát tài chính:</label>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (_currentCustomer != null)
+                        {
+                            <span class="badge @(_currentCustomer.IsInDispute ? "bg-danger" : "bg-success") px-2 py-1">
+                                <i class="bi @(_currentCustomer.IsInDispute ? "bi-exclamation-triangle-fill" : "bi-check2-circle") me-1"></i>
+                                @(_currentCustomer.IsInDispute ? "Đang có tranh chấp / Khiếu nại" : "Bình thường")
+                            </span>
+                            <span class="badge bg-secondary-subtle text-secondary px-2 py-1">
+                                Email: @(_currentCustomer.Email ?? "Chưa có")
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-3 text-md-end">
+                    <button class="btn btn-primary px-3 shadow-sm" @onclick="AnalyzeCurrentCustomer" disabled="@(_isLoading || _selectedCustomerId == 0)">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Đang phân tích...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cpu-fill me-1"></i>
+                            <span>Phân Tích AI Toàn Diện</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-pills custom-pills mb-4 gap-2">
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "summary" ? "active" : "") shadow-sm" @onclick='() => _activeTab = "summary"'>
+                <i class="bi bi-file-earmark-person-fill me-1"></i> 1. Tóm Tắt &amp; Sức Khỏe Công Nợ
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "risk" ? "active" : "") shadow-sm" @onclick='() => _activeTab = "risk"'>
+                <i class="bi bi-shield-shaded me-1"></i> 2. Đánh Giá Rủi Ro Tín Dụng
+                @if (_riskAssessment != null && _riskAssessment.RequiresHumanReview)
+                {
+                    <span class="badge bg-danger ms-1">Cần duyệt</span>
+                }
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "draft" ? "active" : "") shadow-sm" @onclick='() => _activeTab = "draft"'>
+                <i class="bi bi-envelope-paper-fill me-1"></i> 3. Soạn Thảo Thư Nhắc Nợ AI
+            </button>
+        </li>
+    </ul>
+
+    <!-- TAB 1: TÓM TẮT KHÁCH HÀNG & SỨC KHỎE CÔNG NỢ -->
+    @if (_activeTab == "summary")
+    {
+        @if (_summaryResult != null)
+        {
+            var gt = _summaryResult.GroundTruth;
+            var ai = _summaryResult.AiNarrative;
+
+            <!-- 1. DỮ LIỆU SỰ THẬT (GROUND TRUTH) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-database-check text-success me-2"></i>Dữ Liệu Sự Thật Từ Hệ Thống (Ground Truth - SQL Server)
+                    </h5>
+                    <span class="badge bg-success-subtle text-success border border-success">
+                        <i class="bi bi-lock-fill me-1"></i>Số liệu chuẩn xác thực 100%
+                    </span>
+                </div>
+                <div class="card-body pt-0">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="p-3 rounded-3 bg-light border">
+                                <div class="text-muted small">Tổng dư nợ hiện tại</div>
+                                <div class="fs-5 fw-bold text-danger">@gt.CurrentDebt.ToString("N0") đ</div>
+                                <div class="small text-muted mt-1">Xuất bán: @gt.TotalInvoicedAmount.ToString("N0") đ</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="p-3 rounded-3 bg-light border">
+                                <div class="text-muted small">Hạn mức tín dụng</div>
+                                <div class="fs-5 fw-bold text-dark">@gt.CreditLimit.ToString("N0") đ</div>
+                                <div class="small @(gt.CreditLimitUtilizationRate > 80 ? "text-danger fw-bold" : "text-muted") mt-1">
+                                    Đã dùng: @gt.CreditLimitUtilizationRate% hạn mức
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="p-3 rounded-3 bg-light border">
+                                <div class="text-muted small">Hóa đơn quá hạn</div>
+                                <div class="fs-5 fw-bold text-warning">@gt.OverdueInvoicesCount hóa đơn</div>
+                                <div class="small text-muted mt-1">Số tiền: @gt.OverdueInvoicesAmount.ToString("N0") đ</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="p-3 rounded-3 bg-light border">
+                                <div class="text-muted small">Số ngày quá hạn tối đa</div>
+                                <div class="fs-5 fw-bold @(gt.MaxDaysOverdue > 30 ? "text-danger" : "text-dark")">
+                                    @gt.MaxDaysOverdue ngày
+                                </div>
+                                <div class="small text-muted mt-1">Trung bình trễ: @gt.AverageDaysLate ngày</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dấu hiệu cảnh báo ưu tiên -->
+                    @if (gt.PriorityWarningSignals != null && gt.PriorityWarningSignals.Any())
+                    {
+                        <div class="mt-3 p-3 bg-danger-subtle rounded-3 border border-danger">
+                            <div class="fw-bold text-danger mb-1">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>Các Dấu Hiệu Cần Ưu Tiên Theo Dõi:
+                            </div>
+                            <ul class="mb-0 text-danger ps-3 small">
+                                @foreach (var sig in gt.PriorityWarningSignals)
+                                {
+                                    <li class="fw-semibold">@sig</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- 2. PHÂN TÍCH & DIỄN GIẢI DO AI TỔNG HỢP -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-primary">
+                        <i class="bi bi-stars text-primary me-2"></i>Diễn Giải &amp; Tổng Hợp Điều Hành Do AI Tạo (AI Narrative)
+                    </h5>
+                    <span class="badge bg-primary-subtle text-primary border border-primary">
+                        <i class="bi bi-robot me-1"></i>Mô hình: @_summaryResult.AiModel (@_summaryResult.ProcessingTimeMs ms)
+                    </span>
+                </div>
+                <div class="card-body pt-0">
+                    <div class="p-3 rounded-3 bg-light mb-3 border">
+                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-file-text me-1 text-primary"></i>Tóm Tắt Điều Hành (Executive Summary):</h6>
+                        <p class="mb-0 text-secondary" style="line-height: 1.6; white-space: pre-line;">@ai.ExecutiveSummary</p>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 bg-white border h-100 shadow-sm">
+                                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-heart-pulse-fill me-1 text-info"></i>Đánh Giá Sức Khỏe Thanh Toán:</h6>
+                                <p class="mb-0 text-muted small" style="line-height: 1.5;">@ai.PaymentHealthAssessment</p>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 bg-white border h-100 shadow-sm">
+                                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-lightbulb-fill me-1 text-warning"></i>Khuyến Nghị Hành Động Cho Nhân Viên:</h6>
+                                <p class="mb-0 text-muted small" style="line-height: 1.5;">@ai.RecommendedAction</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bảng danh sách hóa đơn mở -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 border-0">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-receipt me-2 text-secondary"></i>Danh Sách Hóa Đơn Mở Đang Theo Dõi (@gt.OpenInvoices.Count hóa đơn)</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th>Số Hóa Đơn</th>
+                                    <th>Ngày Phát Hành</th>
+                                    <th>Ngày Đáo Hạn</th>
+                                    <th class="text-end">Tổng Tiền</th>
+                                    <th class="text-end">Dư Nợ Còn Lại</th>
+                                    <th class="text-center">Số Ngày Quá Hạn</th>
+                                    <th class="text-center">Trạng Thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (gt.OpenInvoices.Any())
+                                {
+                                    @foreach (var inv in gt.OpenInvoices)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-primary">@inv.InvoiceNumber</td>
+                                            <td>@inv.InvoiceDate.ToString("dd/MM/yyyy")</td>
+                                            <td>@inv.DueDate.ToString("dd/MM/yyyy")</td>
+                                            <td class="text-end">@inv.TotalAmount.ToString("N0") đ</td>
+                                            <td class="text-end fw-bold text-danger">@inv.RemainingAmount.ToString("N0") đ</td>
+                                            <td class="text-center">
+                                                @if (inv.DaysOverdue > 0)
+                                                {
+                                                    <span class="badge bg-danger-subtle text-danger">Quá hạn @inv.DaysOverdue ngày</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-success-subtle text-success">Còn @Math.Abs(inv.DaysOverdue) ngày</span>
+                                                }
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge bg-light text-dark border">@inv.Status</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4 text-muted">Không có hóa đơn mở nào cần theo dõi.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <p class="text-muted">Đang tải và tổng hợp dữ liệu tóm tắt khách hàng...</p>
+            </div>
+        }
+    }
+
+    <!-- TAB 2: ĐÁNH GIÁ RỦI RO TÍN DỤNG (CREDIT RISK ASSESSMENT) -->
+    @if (_activeTab == "risk")
+    {
+        @if (_riskAssessment != null)
+        {
+            <div class="row g-4 mb-4">
+                <!-- Đồng hồ chấm điểm rủi ro -->
+                <div class="col-md-5">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 text-center p-4">
+                        <div class="text-muted small fw-semibold text-uppercase mb-2">Thang Điểm Tín Nhiệm &amp; Rủi Ro Tín Dụng</div>
+                        
+                        <div class="my-3">
+                            <div class="display-3 fw-bold @GetScoreColorClass(_riskAssessment.RiskScore)">
+                                @_riskAssessment.RiskScore.ToString("0.0")
+                            </div>
+                            <div class="text-muted small">trên thang điểm 100.0 (Phiên bản: @_riskAssessment.ModelVersion)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <span class="badge px-3 py-2 fs-6 @GetRiskBadgeClass(_riskAssessment.RiskLevel)">
+                                Mức độ rủi ro: @_riskAssessment.RiskLevel
+                            </span>
+                        </div>
+
+                        @if (_riskAssessment.RequiresHumanReview)
+                        {
+                            <div class="alert alert-danger py-2 px-3 small text-start mb-3 shadow-sm">
+                                <i class="bi bi-shield-lock-fill me-1"></i>
+                                <strong>BẮT BUỘC KIỂM TRA BỞI CON NGƯỜI:</strong> Khách hàng có điểm rủi ro cao hoặc tranh chấp, cần Kế toán trưởng duyệt trước khi phê duyệt bất kỳ hạn mức hay đơn hàng mới.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-success py-2 px-3 small text-start mb-3 shadow-sm">
+                                <i class="bi bi-shield-check me-1"></i>
+                                <strong>Hồ sơ rủi ro an toàn:</strong> Không yêu cầu kiểm tra bắt buộc. Duy trì bán hàng bình thường.
+                            </div>
+                        }
+
+                        <div class="mt-auto pt-3 border-top d-flex justify-content-between align-items-center text-muted small">
+                            <span>Thời điểm đánh giá:</span>
+                            <span>@_riskAssessment.AssessedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bảng phân rã các yếu tố giải thích (Explainable Factors) -->
+                <div class="col-md-7">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-header bg-white py-3 border-0">
+                            <h5 class="fw-bold mb-0 text-dark">
+                                <i class="bi bi-diagram-3-fill text-primary me-2"></i>Yếu Tố Giải Thích Điểm Số (Explainability Factors)
+                            </h5>
+                        </div>
+                        <div class="card-body pt-0">
+                            <div class="list-group list-group-flush">
+                                @foreach (var f in _riskAssessment.Factors)
+                                {
+                                    <div class="list-group-item px-0 py-3 d-flex justify-content-between align-items-center">
+                                        <div class="me-3">
+                                            <div class="d-flex align-items-center gap-2 mb-1">
+                                                <span class="badge @GetSeverityBadge(f.Severity)">@f.Category</span>
+                                                <span class="fw-semibold text-dark">@f.Description</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span class="badge @(f.ScoreImpact < 0 ? "bg-danger" : "bg-success") px-2 py-1 fs-6">
+                                                @(f.ScoreImpact > 0 ? $"+{f.ScoreImpact}" : $"{f.ScoreImpact}") điểm
+                                            </span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="mt-4 p-3 rounded-3 bg-light border">
+                                <h6 class="fw-bold text-dark mb-1"><i class="bi bi-pin-angle-fill me-1 text-primary"></i>Khuyến Nghị Quản Trị:</h6>
+                                <p class="mb-0 text-muted small">@_riskAssessment.RecommendedAction</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD RANH GIỚI THẨM QUYỀN (AI GUARDRAILS) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4" style="background: #fff8f8; border-left: 5px solid #dc3545 !important;">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="fs-2 text-danger"><i class="bi bi-shield-slash-fill"></i></div>
+                        <div>
+                            <div class="fw-bold text-danger fs-6">RANH GIỚI THẨM QUYỀN &amp; NGUYÊN TẮC AN TOÀN (AI GUARDRAILS):</div>
+                            <div class="text-secondary small mt-1">
+                                Trợ lý AI chỉ đóng vai trò phân tích và đề xuất hỗ trợ ra quyết định. <strong>AI TUYỆT ĐỐI KHÔNG:</strong>
+                                (1) Tự ý từ chối đơn hàng; (2) Tự động thay đổi hạn mức tín dụng; (3) Tự ý ghi nhận hoặc sửa phiếu thanh toán; (4) Tự động phê duyệt bất kỳ giao dịch tài chính nào. Quyền hạn quyết định thuộc về Giám đốc tài chính và Kế toán trưởng có thẩm quyền.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lịch sử đánh giá rủi ro của khách hàng -->
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-clock-history me-2 text-secondary"></i>Nhật Ký Đánh Giá Rủi Ro Trước Đó</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th>Mã ĐG</th>
+                                    <th>Thời Điểm</th>
+                                    <th>Mô Hình</th>
+                                    <th class="text-center">Điểm Rủi Ro</th>
+                                    <th class="text-center">Phân Cấp</th>
+                                    <th>Người Đánh Giá</th>
+                                    <th>Kiểm Tra Con Người</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_assessmentHistory.Any())
+                                {
+                                    @foreach (var h in _assessmentHistory)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">#@h.Id</td>
+                                            <td>@h.AssessedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td><span class="badge bg-light text-dark border">@h.ModelVersion</span></td>
+                                            <td class="text-center fw-bold @GetScoreColorClass(h.RiskScore)">@h.RiskScore.ToString("0.0")</td>
+                                            <td class="text-center"><span class="badge @GetRiskBadgeClass(h.RiskLevel)">@h.RiskLevel</span></td>
+                                            <td>@h.AssessedBy</td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(h.HumanReviewedBy))
+                                                {
+                                                    <span class="badge bg-success-subtle text-success">Đã duyệt bởi: @h.HumanReviewedBy</span>
+                                                }
+                                                else if (h.RequiresHumanReview)
+                                                {
+                                                    <span class="badge bg-danger-subtle text-danger">Chờ Kế toán trưởng duyệt</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted small">Không bắt buộc</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4 text-muted">Chưa có lịch sử đánh giá nào cho khách hàng này.</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+
+    <!-- TAB 3: SOẠN THẢO THƯ NHẮC NỢ AI (AI REMINDER DRAFT GENERATOR) -->
+    @if (_activeTab == "draft")
+    {
+        <div class="row g-4 mb-4">
+            <!-- Cấu hình soạn thư -->
+            <div class="col-md-5">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-header bg-white py-3 border-0">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-sliders text-primary me-2"></i>Cấu Hình Soạn Thảo Thư Nhắc Nợ
+                        </h5>
+                    </div>
+                    <div class="card-body pt-0">
+                        <!-- Chọn giọng điệu -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Chọn Giọng Điệu (Tone of Voice):</label>
+                            <div class="d-flex flex-column gap-2">
+                                <label class="p-2 border rounded-3 d-flex align-items-center gap-2 cursor-pointer @(_selectedTone == "Polite" ? "bg-primary-subtle border-primary" : "bg-light")">
+                                    <input type="radio" name="toneOption" value="Polite" checked="@(_selectedTone == "Polite")" @onchange='() => _selectedTone = "Polite"' />
+                                    <div>
+                                        <div class="fw-bold text-primary small">Lịch sự, hòa nhã (Polite)</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Phù hợp hóa đơn mới đến hạn hoặc khách hàng truyền thống uy tín.</div>
+                                    </div>
+                                </label>
+
+                                <label class="p-2 border rounded-3 d-flex align-items-center gap-2 cursor-pointer @(_selectedTone == "Neutral" ? "bg-primary-subtle border-primary" : "bg-light")">
+                                    <input type="radio" name="toneOption" value="Neutral" checked="@(_selectedTone == "Neutral")" @onchange='() => _selectedTone = "Neutral"' />
+                                    <div>
+                                        <div class="fw-bold text-dark small">Trung lập, chuyên nghiệp (Neutral)</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Đối soát công nợ định kỳ và nhắc hạn theo thủ tục kế toán.</div>
+                                    </div>
+                                </label>
+
+                                <label class="p-2 border rounded-3 d-flex align-items-center gap-2 cursor-pointer @(_selectedTone == "Formal" ? "bg-primary-subtle border-primary" : "bg-light")">
+                                    <input type="radio" name="toneOption" value="Formal" checked="@(_selectedTone == "Formal")" @onchange='() => _selectedTone = "Formal"' />
+                                    <div>
+                                        <div class="fw-bold text-danger small">Trang trọng, kiên quyết (Formal/Firm)</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">Đôn đốc nợ quá hạn lâu ngày, nhấn mạnh tạm dừng giao hàng.</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Ghi chú riêng của nhân viên -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Chỉ dẫn bổ sung của nhân viên (Optional):</label>
+                            <textarea class="form-control form-control-sm" rows="3" placeholder="Ví dụ: Đính kèm biên bản nghiệm thu đợt 2, đề nghị chuyển tiền trước 17h thứ 6..." @bind="_customNotes"></textarea>
+                        </div>
+
+                        <!-- Nút kích hoạt AI sinh bản nháp -->
+                        <button class="btn btn-primary w-100 py-2 shadow-sm mb-2" @onclick="GenerateAiDraft" disabled="@(_isDrafting || _selectedCustomerId == 0)">
+                            @if (_isDrafting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>AI Đang Soạn Thảo...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-magic me-1"></i>
+                                <span>AI Soạn Thảo Bản Nháp Ngay</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Khung xem trước & Chỉnh sửa thư của nhân viên -->
+            <div class="col-md-7">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-pencil-square text-success me-2"></i>Bản Nháp Thư Nhắc Nợ (Xem &amp; Sửa Trực Tiếp)
+                        </h5>
+                        @if (_draftResult != null)
+                        {
+                            <span class="badge bg-info-subtle text-info border border-info">
+                                <i class="bi bi-robot me-1"></i>@_draftResult.GeneratorModel
+                            </span>
+                        }
+                    </div>
+                    <div class="card-body pt-0">
+                        @if (_draftResult != null)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-muted">Người nhận (Email Khách Hàng):</label>
+                                <input type="email" class="form-control" @bind="_draftRecipientEmail" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-muted">Tiêu đề Thư (Subject):</label>
+                                <input type="text" class="form-control fw-semibold" @bind="_draftSubject" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-muted">Nội dung Thư (Body - Nhân viên có thể chỉnh sửa tự do):</label>
+                                <textarea class="form-control reminder-email-body" rows="12" @bind="_draftBody" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 0.95rem; line-height: 1.6;"></textarea>
+                            </div>
+
+                            <!-- Checkbox xác nhận chính sách -->
+                            <div class="p-3 bg-light rounded-3 border mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="confirmPolicyCheck" @bind="_isConfirmedByStaff" />
+                                    <label class="form-check-label small fw-semibold text-dark" for="confirmPolicyCheck">
+                                        Tôi đã rà soát nội dung thư, số tiền đối soát và chịu trách nhiệm gửi email theo đúng quy trình &amp; chính sách công nợ của doanh nghiệp.
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2">
+                                <button class="btn btn-outline-secondary" @onclick="ResetDraft">
+                                    <i class="bi bi-x-circle me-1"></i> Hủy
+                                </button>
+                                <button class="btn btn-success px-4 shadow-sm" @onclick="SendOfficialReminder" disabled="@(!_isConfirmedByStaff || _isSendingReminder)">
+                                    @if (_isSendingReminder)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span>Đang gửi thư...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-send-fill me-1"></i>
+                                        <span>Gửi Email Chính Thức</span>
+                                    }
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5 text-muted">
+                                <i class="bi bi-envelope-paper display-4 text-secondary mb-3 d-block"></i>
+                                <p class="mb-0">Vui lòng chọn khách hàng, giọng điệu và bấm <strong>"AI Soạn Thảo Bản Nháp Ngay"</strong> để hệ thống tạo thư.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Customer> _customers = new();
+    private int _selectedCustomerId = 1;
+    private Customer? _currentCustomer;
+
+    private string _activeTab = "summary";
+    private bool _isLoading = false;
+    private bool _isDrafting = false;
+    private bool _isSendingReminder = false;
+
+    private string? _alertMessage;
+    private string _alertClass = "alert-info";
+
+    // Tab 1 Models
+    private CustomerArSummaryResultDto? _summaryResult;
+
+    // Tab 2 Models
+    private CreditRiskAssessmentResultDto? _riskAssessment;
+    private List<CreditRiskAssessment> _assessmentHistory = new();
+
+    // Tab 3 Models
+    private string _selectedTone = "Polite";
+    private string? _customNotes;
+    private AiReminderDraftResultDto? _draftResult;
+    private string _draftRecipientEmail = string.Empty;
+    private string _draftSubject = string.Empty;
+    private string _draftBody = string.Empty;
+    private bool _isConfirmedByStaff = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+        if (_customers.Any())
+        {
+            _selectedCustomerId = _customers.First().Id;
+            await AnalyzeCurrentCustomer();
+        }
+    }
+
+    private async Task LoadCustomers()
+    {
+        var all = await CustomerRepository.GetAllAsync();
+        _customers = all.OrderBy(c => c.Name).ToList();
+    }
+
+    private async Task OnCustomerSelected(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id))
+        {
+            _selectedCustomerId = id;
+            await AnalyzeCurrentCustomer();
+        }
+    }
+
+    private async Task RefreshAll()
+    {
+        await LoadCustomers();
+        await AnalyzeCurrentCustomer();
+    }
+
+    private async Task AnalyzeCurrentCustomer()
+    {
+        if (_selectedCustomerId <= 0) return;
+
+        _isLoading = true;
+        _alertMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            _currentCustomer = await CustomerRepository.GetByIdAsync(_selectedCustomerId);
+
+            // 1. Tải Summary
+            _summaryResult = await CustomerSummaryUseCase.SummarizeCustomerAsync(_selectedCustomerId);
+
+            // 2. Tải Risk Assessment
+            _riskAssessment = await CreditRiskAssessmentService.AssessCustomerRiskAsync(_selectedCustomerId, "AI Assistant");
+            _assessmentHistory = (await CreditRiskAssessmentService.GetAssessmentHistoryAsync(_selectedCustomerId)).ToList();
+
+            // 3. Reset draft
+            _draftResult = null;
+            _isConfirmedByStaff = false;
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi khi phân tích dữ liệu khách hàng: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GenerateAiDraft()
+    {
+        if (_selectedCustomerId <= 0) return;
+
+        _isDrafting = true;
+        _alertMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var req = new ReminderDraftRequestDto
+            {
+                CustomerId = _selectedCustomerId,
+                Tone = _selectedTone,
+                CustomInstructions = _customNotes
+            };
+
+            _draftResult = await ReminderDraftGenerator.GenerateDraftAsync(req);
+            _draftRecipientEmail = _draftResult.RecipientEmail;
+            _draftSubject = _draftResult.Subject;
+            _draftBody = _draftResult.Body;
+            _isConfirmedByStaff = false;
+
+            _alertMessage = "Bản nháp thư nhắc nợ AI đã được tạo thành công! Quý nhân viên vui lòng kiểm tra và hiệu chỉnh lại trước khi gửi.";
+            _alertClass = "alert-success";
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi khi tạo bản nháp thư: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+        finally
+        {
+            _isDrafting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SendOfficialReminder()
+    {
+        if (!_isConfirmedByStaff || _draftResult == null)
+        {
+            _alertMessage = "Bạn phải kiểm tra và tích chọn xác nhận trước khi gửi email.";
+            _alertClass = "alert-warning";
+            return;
+        }
+
+        _isSendingReminder = true;
+        _alertMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            string staffName = authState.User.Identity?.Name ?? "StaffUser";
+
+            var draftDto = new ReminderDraftDto
+            {
+                CustomerId = _draftResult.CustomerId,
+                CustomerCode = _draftResult.CustomerCode,
+                CustomerName = _draftResult.CustomerName,
+                RecipientEmail = _draftRecipientEmail,
+                Tone = _selectedTone,
+                Subject = _draftSubject,
+                Body = _draftBody,
+                InvoiceIds = _draftResult.Invoices.Select(i => i.InvoiceId).ToList(),
+                TotalDebtAmount = _draftResult.TotalDebtAmount,
+                AutoSendApproved = true,
+                IdempotencyKey = $"AI-MANUAL-{_selectedCustomerId}-{DateTime.UtcNow:yyyyMMdd-HHmmss}"
+            };
+
+            var log = await ReminderService.QueueOrSendReminderAsync(draftDto, confirmedBy: staffName, forceSend: true);
+
+            if (log.Status == "Sent" || log.Status == "Queued")
+            {
+                _alertMessage = $"Đã gửi thành công email nhắc nợ đến {_draftRecipientEmail} (Mã nhật ký: #{log.Id}, Trạng thái: {log.Status})!";
+                _alertClass = "alert-success";
+                _draftResult = null;
+                _isConfirmedByStaff = false;
+            }
+            else
+            {
+                _alertMessage = $"Thư được xử lý ở trạng thái '{log.Status}': {log.LastError ?? "Đang trong hàng đợi kiểm duyệt"}";
+                _alertClass = "alert-warning";
+            }
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi hệ thống khi gửi email: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+        finally
+        {
+            _isSendingReminder = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetDraft()
+    {
+        _draftResult = null;
+        _isConfirmedByStaff = false;
+    }
+
+    private string GetScoreColorClass(decimal score)
+    {
+        if (score >= 80m) return "text-success";
+        if (score >= 60m) return "text-primary";
+        if (score >= 40m) return "text-warning";
+        return "text-danger";
+    }
+
+    private string GetRiskBadgeClass(string level) => level switch
+    {
+        "Thấp" => "bg-success text-white",
+        "Trung bình" => "bg-info text-white",
+        "Cao" => "bg-warning text-dark",
+        "Nghiêm trọng" => "bg-danger text-white",
+        _ => "bg-secondary text-white"
+    };
+
+    private string GetSeverityBadge(string severity) => severity switch
+    {
+        "Danger" => "bg-danger",
+        "Warning" => "bg-warning text-dark",
+        "Good" => "bg-success",
+        _ => "bg-secondary"
+    };
+}

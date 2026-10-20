@@ -14,6 +14,9 @@ using SalesAR.UseCases.Reminders;
 using SalesAR.Plugins.Reminders;
 using SalesAR.UseCases.Dashboard;
 using SalesAR.Plugins.Dashboard;
+using SalesAR.UseCases.AI;
+using SalesAR.UseCases.AI.Providers;
+using SalesAR.Plugins.AI;
 using SalesAR.Web.Auth;
 using SalesAR.Web.Components;
 using SalesAR.Web.Services;
@@ -124,6 +127,15 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<BackgroundReminder
 // 12. AR Dashboard & Cash Collection Forecast (Part 7)
 builder.Services.AddScoped<IArDashboardRepository, ArDashboardRepository>();
 builder.Services.AddScoped<IArDashboardUseCase, ArDashboardUseCase>();
+
+// 13. AI Assistance for Accounts Receivable (Part 8)
+builder.Services.AddHttpClient<GeminiAiProvider>();
+builder.Services.AddSingleton<LocalHeuristicAiProvider>();
+builder.Services.AddScoped<IAIProvider, GeminiAiProvider>();
+builder.Services.AddScoped<ICreditRiskAssessmentRepository, CreditRiskAssessmentRepository>();
+builder.Services.AddScoped<ICustomerArSummaryUseCase, CustomerArSummaryUseCase>();
+builder.Services.AddScoped<ICreditRiskAssessmentService, CreditRiskAssessmentService>();
+builder.Services.AddScoped<IReminderDraftGenerator, ReminderDraftGenerator>();
 
 var app = builder.Build();
 
