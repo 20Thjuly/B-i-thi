@@ -94,7 +94,26 @@
                                         <td class="text-end fw-bold text-success fs-6">
                                             @p.Amount.ToString("N0") đ
                                         </td>
-                                        <td class="text-muted">@(string.IsNullOrWhiteSpace(p.Note) ? "-" : p.Note)</td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(p.Note) && p.Note.Contains("[Chuyển khoản"))
+                                            {
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1">
+                                                    <i class="bi bi-qr-code me-1"></i>Chuyển khoản
+                                                </span>
+                                                <span class="text-dark small">@p.Note.Replace("[Chuyển khoản VietQR", "").Replace("[Chuyển khoản", "").TrimStart(' ', '-', ']')</span>
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(p.Note) && p.Note.Contains("[Tiền mặt]"))
+                                            {
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle me-1">
+                                                    <i class="bi bi-cash me-1"></i>Tiền mặt
+                                                </span>
+                                                <span class="text-dark small">@p.Note.Replace("[Tiền mặt]", "").Trim()</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small">@(string.IsNullOrWhiteSpace(p.Note) ? "-" : p.Note)</span>
+                                            }
+                                        </td>
                                         <td class="text-center">
                                             <span class="badge bg-light text-dark border">
                                                 <i class="bi bi-diagram-3 me-1"></i>@allocCount HĐ

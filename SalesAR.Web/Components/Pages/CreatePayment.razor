@@ -5,10 +5,11 @@
 @inject IViewCustomersUseCase ViewCustomersUseCase
 @inject IGetCustomerDebtUseCase GetCustomerDebtUseCase
 @inject IViewInvoicesUseCase ViewInvoicesUseCase
+@inject IBankSettingsService BankSettingsService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
-
-<PageTitle>Ghi nhận Thu tiền & Phân bổ FIFO</PageTitle>
+<PageTitle>Ghi nhận Thu tiền &amp; Phân bổ FIFO</PageTitle>
 
 <div class="container-fluid px-0">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -16,12 +17,27 @@
             <h1 class="h3 fw-bold text-dark mb-1">
                 <i class="bi bi-cash-coin text-success me-2"></i>Ghi nhận Thu tiền Khách hàng
             </h1>
-            <p class="text-muted small mb-0">Thực hiện thu tiền và tự động phân bổ cấn trừ công nợ theo nguyên tắc FIFO</p>
+            <p class="text-muted small mb-0">Thực hiện thu tiền (tiền mặt / chuyển khoản VietQR) và tự động phân bổ cấn trừ công nợ theo nguyên tắc FIFO</p>
         </div>
-        <a href="payments" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách
-        </a>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="OpenBankSettings">
+                <i class="bi bi-bank me-1"></i> Cài đặt TK nhận tiền
+            </button>
+            <a href="payments" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i> Quay lại danh sách
+            </a>
+        </div>
     </div>
+
+    <!-- Toast / Notification bar -->
+    @if (!string.IsNullOrEmpty(_toastMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm py-2 px-3 mb-3 d-flex align-items-center" role="alert">
+            <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+            <div>@_toastMessage</div>
+            <button type="button" class="btn-close ms-auto py-2" @onclick='() => _toastMessage = null'></button>
+        </div>
+    }
 
     <!-- Friendly Business Error Alert (K3.3) -->
     @if (!string.IsNullOrEmpty(_errorMessage))
@@ -45,16 +61,33 @@
             </div>
             <div class="card-body">
                 <div class="p-3 bg-light rounded mb-3">
-                    <div class="row g-2">
-                        <div class="col-12 col-md-4">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-3">
                             <span class="text-muted small">Mã phiếu thu:</span>
                             <div class="fw-bold fs-6">@_model.PaymentNumber</div>
                         </div>
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <span class="text-muted small">Khách hàng:</span>
                             <div class="fw-bold fs-6">@_selectedCustomer?.Name</div>
                         </div>
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
+                            <span class="text-muted small">Hình thức thu tiền:</span>
+                            <div>
+                                @if (_model.PaymentMethod == "BankTransfer")
+                                {
+                                    <span class="badge bg-primary fs-6">
+                                        <i class="bi bi-qr-code me-1"></i> Chuyển khoản (VietQR)
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success fs-6">
+                                        <i class="bi bi-cash-stack me-1"></i> Tiền mặt
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-3">
                             <span class="text-muted small">Tổng số tiền đã thu:</span>
                             <div class="fw-bold text-success fs-5">@_model.Amount.ToString("N0") đ</div>
                         </div>
@@ -148,10 +181,73 @@
             <div class="row g-4">
                 <!-- Form Inputs -->
                 <div class="col-12 col-lg-7">
+                    <!-- Phương thức thanh toán (Tiền mặt / Chuyển khoản) -->
+                    <div class="card shadow-sm border-0 mb-4">
+                        <div class="card-header bg-white py-3 border-0">
+                            <h5 class="card-title fw-bold text-dark mb-0 d-flex align-items-center">
+                                <i class="bi bi-wallet2 text-primary me-2"></i>
+                                <span>Hình thức thu tiền</span>
+                                <span class="badge bg-primary-subtle text-primary border ms-2 small">Chọn hình thức</span>
+                            </h5>
+                        </div>
+                        <div class="card-body pt-0">
+                            <div class="row g-3">
+                                <!-- Thẻ chọn Tiền mặt -->
+                                <div class="col-12 col-sm-6">
+                                    <div class="p-3 rounded-3 border cursor-pointer transition-all @(_model.PaymentMethod == "Cash" ? "border-success bg-success-subtle shadow-sm" : "border-secondary-subtle bg-light")"
+                                         style="cursor: pointer; border-width: 2px !important;"
+                                         @onclick='() => SetPaymentMethod("Cash")'>
+                                        <div class="d-flex align-items-center">
+                                            <div class="rounded-circle d-flex align-items-center justify-content-center me-3 @(_model.PaymentMethod == "Cash" ? "bg-success text-white" : "bg-white text-success border")"
+                                                 style="width: 48px; height: 48px; min-width: 48px;">
+                                                <i class="bi bi-cash-stack fs-4"></i>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="fw-bold text-dark fs-6">Tiền mặt</span>
+                                                    @if (_model.PaymentMethod == "Cash")
+                                                    {
+                                                        <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                                                    }
+                                                </div>
+                                                <div class="text-muted small">Thu tiền mặt trực tiếp tại quầy</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Thẻ chọn Chuyển khoản VietQR -->
+                                <div class="col-12 col-sm-6">
+                                    <div class="p-3 rounded-3 border cursor-pointer transition-all @(_model.PaymentMethod == "BankTransfer" ? "border-primary bg-primary-subtle shadow-sm" : "border-secondary-subtle bg-light")"
+                                         style="cursor: pointer; border-width: 2px !important;"
+                                         @onclick='() => SetPaymentMethod("BankTransfer")'>
+                                        <div class="d-flex align-items-center">
+                                            <div class="rounded-circle d-flex align-items-center justify-content-center me-3 @(_model.PaymentMethod == "BankTransfer" ? "bg-primary text-white" : "bg-white text-primary border")"
+                                                 style="width: 48px; height: 48px; min-width: 48px;">
+                                                <i class="bi bi-qr-code-scan fs-4"></i>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="fw-bold text-dark fs-6">Chuyển khoản (VietQR)</span>
+                                                    @if (_model.PaymentMethod == "BankTransfer")
+                                                    {
+                                                        <i class="bi bi-check-circle-fill text-primary fs-5"></i>
+                                                    }
+                                                </div>
+                                                <div class="text-muted small">Quét mã QR tự động hiện số tiền</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Khung thông tin Phiếu thu cơ bản -->
                     <div class="card shadow-sm border-0 mb-4">
                         <div class="card-header bg-white py-3 border-0">
                             <h5 class="card-title fw-bold text-dark mb-0">
-                                <i class="bi bi-card-text text-primary me-2"></i>Thông tin Phiếu thu
+                                <i class="bi bi-card-text text-primary me-2"></i>Thông tin Giao dịch Thu tiền
                             </h5>
                         </div>
                         <div class="card-body">
@@ -180,7 +276,18 @@
 
                                 <!-- Số tiền thu -->
                                 <div class="col-12">
-                                    <label class="form-label fw-semibold">Số tiền thu (VNĐ) <span class="text-danger">*</span></label>
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label fw-semibold mb-0">
+                                            Số tiền thu (VNĐ) <span class="text-danger">*</span>
+                                        </label>
+                                        @if (_totalOutstandingDebt > 0)
+                                        {
+                                            <button type="button" class="btn btn-link btn-sm text-primary p-0 text-decoration-none fw-semibold"
+                                                    @onclick="SelectFullDebt">
+                                                <i class="bi bi-arrow-down-circle me-1"></i>Thu toàn bộ nợ (@_totalOutstandingDebt.ToString("N0") đ)
+                                            </button>
+                                        }
+                                    </div>
                                     <div class="input-group">
                                         <InputNumber class="form-control fs-5 fw-bold text-success" 
                                                      @bind-Value="_model.Amount" 
@@ -189,19 +296,160 @@
                                         <span class="input-group-text fw-bold">VNĐ</span>
                                     </div>
                                     <ValidationMessage For="() => _model.Amount" class="text-danger small" />
+
+                                    <!-- Quick Amount Buttons -->
+                                    <div class="d-flex flex-wrap gap-1 mt-2">
+                                        <span class="text-muted small me-1 align-self-center">Gợi ý nhanh:</span>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" @onclick="() => SetQuickAmount(500000)">500k</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" @onclick="() => SetQuickAmount(1000000)">1 Triệu</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" @onclick="() => SetQuickAmount(2000000)">2 Triệu</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" @onclick="() => SetQuickAmount(5000000)">5 Triệu</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" @onclick="() => SetQuickAmount(10000000)">10 Triệu</button>
+                                        @if (_totalOutstandingDebt > 0)
+                                        {
+                                            <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 fw-semibold" @onclick="SelectFullDebt">Tất toán nợ</button>
+                                        }
+                                    </div>
+
                                     @if (_selectedCustomer != null && _model.Amount > _totalOutstandingDebt && _totalOutstandingDebt > 0)
                                     {
-                                        <div class="text-warning small mt-1">
-                                            <i class="bi bi-info-circle me-1"></i>Số tiền thu lớn hơn tổng công nợ hiện tại (@_totalOutstandingDebt.ToString("N0") đ).
+                                        <div class="text-warning small mt-2 d-flex align-items-center">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            <span>Số tiền thu lớn hơn tổng công nợ hiện tại (@_totalOutstandingDebt.ToString("N0") đ). Phần dư sẽ không phân bổ cho hóa đơn nào.</span>
                                         </div>
                                     }
                                 </div>
 
+                                <!-- Giao diện chi tiết khi chọn Chuyển khoản (VietQR) -->
+                                @if (_model.PaymentMethod == "BankTransfer")
+                                {
+                                    <div class="col-12">
+                                        <div class="card border border-primary-subtle bg-white shadow-sm rounded-3 overflow-hidden">
+                                            <div class="card-header bg-primary text-white py-2 px-3 d-flex justify-content-between align-items-center">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="bi bi-qr-code-scan fs-5"></i>
+                                                    <span class="fw-bold">Mã QR Chuyển khoản VietQR (Tự động kèm số tiền)</span>
+                                                </div>
+                                                <button type="button" class="btn btn-sm btn-light py-0 px-2 fw-semibold" @onclick="OpenBankSettings">
+                                                    <i class="bi bi-gear-fill me-1 text-primary"></i> Đổi tài khoản nhận tiền
+                                                </button>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                <div class="row g-3 align-items-center">
+                                                    <!-- QR Image Box -->
+                                                    <div class="col-12 col-md-5 text-center">
+                                                        <div class="p-2 border rounded-3 bg-light d-inline-block position-relative shadow-sm" style="max-width: 250px;">
+                                                            @if (_model.Amount > 0)
+                                                            {
+                                                                <img src="@GetVietQrUrl()" 
+                                                                     alt="VietQR Code" 
+                                                                     class="img-fluid rounded" 
+                                                                     style="max-height: 230px; object-fit: contain;" />
+                                                                
+                                                                <div class="mt-2 d-flex justify-content-center gap-1">
+                                                                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" @onclick="() => _showQrZoomModal = true" title="Phóng to">
+                                                                        <i class="bi bi-zoom-in me-1"></i> Phóng to
+                                                                    </button>
+                                                                    <a href="@GetVietQrUrl()" target="_blank" download="vietqr_@(_model.PaymentNumber).png" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Tải ảnh">
+                                                                        <i class="bi bi-download me-1"></i> Tải về
+                                                                    </a>
+                                                                </div>
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="py-5 px-3 text-muted">
+                                                                    <i class="bi bi-qr-code fs-1 d-block mb-2 text-secondary"></i>
+                                                                    <small class="fw-semibold">Vui lòng nhập số tiền để tạo mã QR tự động điền số tiền!</small>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                        <div class="small text-success fw-bold mt-2">
+                                                            <i class="bi bi-shield-check me-1"></i>Chuẩn VietQR (NAPAS 247)
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Bank & Transfer Details with Copy buttons -->
+                                                    <div class="col-12 col-md-7">
+                                                        <div class="p-3 bg-light rounded-3 border">
+                                                            <div class="mb-2 pb-2 border-bottom">
+                                                                <span class="text-muted small d-block">Ngân hàng thụ hưởng:</span>
+                                                                <span class="fw-bold text-dark fs-6">@_bankSettings.BankName</span>
+                                                            </div>
+                                                            <div class="mb-2 pb-2 border-bottom d-flex justify-content-between align-items-center">
+                                                                <div>
+                                                                    <span class="text-muted small d-block">Số tài khoản:</span>
+                                                                    <span class="fw-bold text-primary fs-6 font-monospace">@_bankSettings.AccountNumber</span>
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2" @onclick='() => CopyToClipboard(_bankSettings.AccountNumber, "Đã sao chép Số tài khoản!")'>
+                                                                    <i class="bi bi-clipboard me-1"></i> Sao chép
+                                                                </button>
+                                                            </div>
+                                                            <div class="mb-2 pb-2 border-bottom d-flex justify-content-between align-items-center">
+                                                                <div>
+                                                                    <span class="text-muted small d-block">Chủ tài khoản:</span>
+                                                                    <span class="fw-bold text-dark text-uppercase">@_bankSettings.AccountName</span>
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" @onclick='() => CopyToClipboard(_bankSettings.AccountName, "Đã sao chép Tên chủ TK!")'>
+                                                                    <i class="bi bi-clipboard me-1"></i> Sao chép
+                                                                </button>
+                                                            </div>
+                                                            <div class="mb-2 pb-2 border-bottom d-flex justify-content-between align-items-center">
+                                                                <div>
+                                                                    <span class="text-muted small d-block">Số tiền chuyển (Sau quét QR tự nhận diện):</span>
+                                                                    <span class="fw-bold text-success fs-5 tabular-nums">@_model.Amount.ToString("N0") VNĐ</span>
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-success py-1 px-2" @onclick='() => CopyToClipboard(((long)_model.Amount).ToString(), "Đã sao chép Số tiền!")'>
+                                                                    <i class="bi bi-clipboard me-1"></i> Sao chép
+                                                                </button>
+                                                            </div>
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <div>
+                                                                    <span class="text-muted small d-block">Nội dung chuyển khoản:</span>
+                                                                    <span class="fw-bold text-dark font-monospace">@GetTransferDescription()</span>
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" @onclick='() => CopyToClipboard(GetTransferDescription(), "Đã sao chép Nội dung CK!")'>
+                                                                    <i class="bi bi-clipboard me-1"></i> Sao chép
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="alert alert-info py-2 px-3 small mt-2 mb-0 d-flex align-items-center gap-2">
+                                                            <i class="bi bi-info-circle-fill text-info fs-6"></i>
+                                                            <span>Khách hàng mở ứng dụng ngân hàng quét mã &rarr; Số tiền và nội dung được điền tự động 100%.</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Mã tham chiếu giao dịch (tùy chọn) -->
+                                                <div class="mt-3 pt-2 border-top">
+                                                    <label class="form-label small fw-semibold text-muted">Mã tham chiếu / Mã giao dịch ngân hàng (Tùy chọn đối soát)</label>
+                                                    <InputText class="form-control form-control-sm" @bind-Value="_model.ReferenceCode" placeholder="VD: FT242948293, MB123456..." />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <!-- Hướng dẫn khi chọn Tiền mặt -->
+                                    <div class="col-12">
+                                        <div class="alert alert-success d-flex align-items-center py-3 mb-0">
+                                            <i class="bi bi-cash-stack fs-3 me-3 text-success"></i>
+                                            <div>
+                                                <h6 class="fw-bold mb-1">Thu tiền mặt trực tiếp tại quầy / quỹ</h6>
+                                                <p class="small mb-0 text-muted">
+                                                    Thủ quỹ kiểm đếm thực nhận đủ <strong class="text-success">@_model.Amount.ToString("N0") VNĐ</strong> từ khách hàng trước khi bấm xác nhận.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
                                 <!-- Ghi chú -->
                                 <div class="col-12">
-                                    <label class="form-label fw-semibold">Ghi chú</label>
+                                    <label class="form-label fw-semibold">Ghi chú phiếu thu</label>
                                     <InputTextArea class="form-control" @bind-Value="_model.Note" rows="2" 
-                                                   placeholder="Nhập ghi chú giao dịch hoặc hình thức chuyển khoản / tiền mặt..." />
+                                                   placeholder="Nhập ghi chú thêm cho giao dịch thu tiền..." />
                                     <ValidationMessage For="() => _model.Note" class="text-danger small" />
                                 </div>
                             </div>
@@ -211,7 +459,7 @@
 
                 <!-- Preview Phân bổ FIFO -->
                 <div class="col-12 col-lg-5">
-                    <div class="card shadow-sm border-0 mb-4">
+                    <div class="card shadow-sm border-0 mb-4 sticky-top" style="top: 1rem; z-index: 10;">
                         <div class="card-header bg-light py-3 border-0">
                             <h5 class="card-title fw-bold text-dark mb-0">
                                 <i class="bi bi-clock-history text-primary me-2"></i>Dự kiến phân bổ FIFO
@@ -240,12 +488,14 @@
                                         <span class="fw-bold text-danger tabular-nums">@_totalOutstandingDebt.ToString("N0") đ</span>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="text-muted small">Số tiền đang nhập:</span>
+                                        <span class="text-muted small">Số tiền đang thu:</span>
                                         <span class="fw-bold text-success fs-6 tabular-nums">@_model.Amount.ToString("N0") đ</span>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center">
-                                        <span class="text-muted small">Số hóa đơn chưa trả:</span>
-                                        <span class="badge badge-soft-primary">@_outstandingInvoices.Count chứng từ</span>
+                                        <span class="text-muted small">Hình thức:</span>
+                                        <span class="fw-semibold @(_model.PaymentMethod == "BankTransfer" ? "text-primary" : "text-success")">
+                                            @(_model.PaymentMethod == "BankTransfer" ? "🏦 Chuyển khoản VietQR" : "💵 Tiền mặt")
+                                        </span>
                                     </div>
                                 </div>
 
@@ -255,9 +505,9 @@
                                 </div>
 
                                 <h6 class="fw-bold small text-muted text-uppercase mb-2" style="font-size: 0.7rem; letter-spacing: 0.05em;">Thứ tự cấn trừ dự kiến (Cũ &rarr; Mới):</h6>
-                                <div class="table-responsive mb-3">
+                                <div class="table-responsive mb-3" style="max-height: 250px; overflow-y: auto;">
                                     <table class="table table-sm align-middle mb-0">
-                                        <thead class="small">
+                                        <thead class="small table-light sticky-top">
                                             <tr>
                                                 <th>Số HĐ</th>
                                                 <th class="text-end">Dư nợ</th>
@@ -285,7 +535,7 @@
 
                             <!-- Action button -->
                             <div class="d-grid gap-2 pt-2">
-                                <button type="submit" class="btn btn-success btn-lg" 
+                                <button type="submit" class="btn btn-success btn-lg shadow-sm" 
                                         disabled="@(_isSubmitting || _model.CustomerId <= 0 || _model.Amount <= 0 || _outstandingInvoices.Count == 0)">
                                     @if (_isSubmitting)
                                     {
@@ -308,9 +558,127 @@
     }
 </div>
 
+<!-- Modal: Cài đặt Thông tin Ngân hàng Nhận tiền (Bank Settings) -->
+@if (_showBankSettingsModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-bank me-2"></i>Cài đặt Tài khoản Ngân hàng Nhận tiền (VietQR)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showBankSettingsModal = false"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">
+                        Thiết lập thông tin tài khoản ngân hàng của bạn để hệ thống tự động sinh mã VietQR chuẩn NAPAS 247 kèm số tiền khi thu tiền từ khách hàng.
+                    </p>
+
+                    <div class="row g-3">
+                        <!-- Chọn Ngân hàng -->
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Ngân hàng thụ hưởng <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="_tempBankSettings.BankId" @bind:after="OnBankSelectionChanged">
+                                @foreach (var bank in BankSettings.SupportedBanks)
+                                {
+                                    <option value="@bank.BankId">[@bank.BankId] @bank.ShortName - @bank.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Số tài khoản -->
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Số tài khoản nhận tiền <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control font-monospace fw-bold" 
+                                   @bind="_tempBankSettings.AccountNumber" 
+                                   placeholder="Nhập số tài khoản ngân hàng của bạn..." />
+                        </div>
+
+                        <!-- Tên chủ tài khoản -->
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Tên chủ tài khoản (Không dấu) <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control text-uppercase fw-semibold" 
+                                   @bind="_tempBankSettings.AccountName" 
+                                   placeholder="VD: NGUYEN VAN A hoặc CONG TY TNHH..." />
+                        </div>
+
+                        <!-- Mẫu hiển thị QR -->
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Giao diện khung VietQR</label>
+                            <select class="form-select" @bind="_tempBankSettings.Template">
+                                <option value="compact2">Chuẩn VietQR đầy đủ (Kèm logo ngân hàng &amp; NAPAS)</option>
+                                <option value="compact">Chuẩn gọn (Compact)</option>
+                                <option value="qr_only">Chỉ mã QR (QR Only)</option>
+                            </select>
+                        </div>
+
+                        <!-- Xem trước QR -->
+                        <div class="col-12 text-center pt-3 border-top">
+                            <span class="text-muted small d-block mb-2">Xem trước mã QR mẫu với thông tin trên:</span>
+                            <div class="p-2 border rounded bg-light d-inline-block shadow-sm">
+                                <img src="@GetPreviewQrUrl()" alt="QR Preview" style="max-height: 180px; object-fit: contain;" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="() => _showBankSettingsModal = false">Đóng</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveBankSettings">
+                        <i class="bi bi-save me-1"></i> Lưu thông tin tài khoản
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Phóng to mã QR để quét dễ dàng -->
+@if (_showQrZoomModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.65);" @onclick="() => _showQrZoomModal = false">
+        <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation>
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-qr-code me-2"></i>Quét mã VietQR Chuyển khoản
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showQrZoomModal = false"></button>
+                </div>
+                <div class="modal-body text-center p-4">
+                    <div class="p-3 bg-white rounded-3 shadow-sm d-inline-block border">
+                        <img src="@GetVietQrUrl()" alt="VietQR Zoom" class="img-fluid" style="max-height: 380px; object-fit: contain;" />
+                    </div>
+                    <div class="mt-3">
+                        <h4 class="text-success fw-bold mb-1">@_model.Amount.ToString("N0") VNĐ</h4>
+                        <div class="text-muted small">@_bankSettings.BankName - STK: @_bankSettings.AccountNumber</div>
+                        <div class="text-muted small fw-semibold">Người nhận: @_bankSettings.AccountName</div>
+                        <div class="badge bg-light text-dark border mt-2">Nội dung: @GetTransferDescription()</div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <a href="@GetVietQrUrl()" target="_blank" download="vietqr_@(_model.PaymentNumber).png" class="btn btn-outline-primary">
+                        <i class="bi bi-download me-1"></i> Tải ảnh QR
+                    </a>
+                    <button type="button" class="btn btn-secondary" @onclick="() => _showQrZoomModal = false">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [SupplyParameterFromQuery]
     public int? CustomerId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public decimal? Amount { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int? InvoiceId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Method { get; set; }
 
     private PaymentFormModel _model = new();
     private Customer? _selectedCustomer;
@@ -323,13 +691,38 @@
     private List<PaymentAllocation>? _lastRecordedAllocations;
     private List<FifoResultItem> _fifoResults = new();
     private string? _errorMessage;
+    private string? _toastMessage;
+
+    // Bank settings & QR state
+    private BankSettings _bankSettings = new();
+    private BankSettings _tempBankSettings = new();
+    private bool _showBankSettingsModal = false;
+    private bool _showQrZoomModal = false;
 
     protected override async Task OnInitializedAsync()
     {
+        _bankSettings = await BankSettingsService.GetSettingsAsync();
+
+        if (!string.IsNullOrWhiteSpace(Method))
+        {
+            _model.PaymentMethod = Method.Equals("Cash", StringComparison.OrdinalIgnoreCase) ? "Cash" : "BankTransfer";
+        }
+
         if (CustomerId.HasValue && CustomerId.Value > 0)
         {
             await OnCustomerSelected(CustomerId.Value);
+
+            if (Amount.HasValue && Amount.Value > 0)
+            {
+                _model.Amount = Amount.Value;
+                CalculatePreview();
+            }
         }
+    }
+
+    private void SetPaymentMethod(string method)
+    {
+        _model.PaymentMethod = method;
     }
 
     private async Task OnCustomerSelected(int customerId)
@@ -348,6 +741,12 @@
                 _outstandingInvoices = outstanding.OrderBy(i => i.InvoiceDate).ThenBy(i => i.Id).ToList();
                 _totalOutstandingDebt = _outstandingInvoices.Sum(i => i.RemainingAmount);
                 
+                // Nếu chưa có số tiền và có nợ, mặc định điền toàn bộ nợ
+                if (_model.Amount <= 0 && _totalOutstandingDebt > 0)
+                {
+                    _model.Amount = _totalOutstandingDebt;
+                }
+
                 CalculatePreview();
             }
         }
@@ -358,6 +757,21 @@
             _previewAllocations.Clear();
             _totalOutstandingDebt = 0;
         }
+    }
+
+    private void SelectFullDebt()
+    {
+        if (_totalOutstandingDebt > 0)
+        {
+            _model.Amount = _totalOutstandingDebt;
+            CalculatePreview();
+        }
+    }
+
+    private void SetQuickAmount(decimal amount)
+    {
+        _model.Amount = amount;
+        CalculatePreview();
     }
 
     private void OnAmountChanged()
@@ -402,11 +816,93 @@
         }
     }
 
+    private string GetVietQrUrl()
+    {
+        return BankSettingsService.GenerateVietQrUrl(
+            _bankSettings,
+            _model.Amount,
+            _model.PaymentNumber,
+            _selectedCustomer?.Code);
+    }
+
+    private string GetPreviewQrUrl()
+    {
+        return BankSettingsService.GenerateVietQrUrl(
+            _tempBankSettings,
+            1000000,
+            "MAU-001",
+            "KHACHHANG");
+    }
+
+    private string GetTransferDescription()
+    {
+        string desc = $"TT {_model.PaymentNumber}";
+        if (_selectedCustomer != null && !string.IsNullOrWhiteSpace(_selectedCustomer.Code))
+        {
+            desc += $" {_selectedCustomer.Code}";
+        }
+        return desc;
+    }
+
+    private async Task CopyToClipboard(string text, string successMessage)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            _toastMessage = successMessage;
+        }
+        catch
+        {
+            _toastMessage = $"Đã copy: {text}";
+        }
+    }
+
+    private void OpenBankSettings()
+    {
+        _tempBankSettings = new BankSettings
+        {
+            BankId = _bankSettings.BankId,
+            BankName = _bankSettings.BankName,
+            AccountNumber = _bankSettings.AccountNumber,
+            AccountName = _bankSettings.AccountName,
+            Template = _bankSettings.Template
+        };
+        _showBankSettingsModal = true;
+    }
+
+    private void OnBankSelectionChanged()
+    {
+        var found = BankSettings.SupportedBanks.FirstOrDefault(b => b.BankId == _tempBankSettings.BankId);
+        if (found != null)
+        {
+            _tempBankSettings.BankName = $"{found.ShortName} ({found.Name})";
+        }
+    }
+
+    private async Task SaveBankSettings()
+    {
+        if (string.IsNullOrWhiteSpace(_tempBankSettings.AccountNumber))
+        {
+            _errorMessage = "Vui lòng nhập số tài khoản ngân hàng.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_tempBankSettings.AccountName))
+        {
+            _errorMessage = "Vui lòng nhập tên chủ tài khoản.";
+            return;
+        }
+
+        await BankSettingsService.SaveSettingsAsync(_tempBankSettings);
+        _bankSettings = _tempBankSettings;
+        _showBankSettingsModal = false;
+        _toastMessage = "Đã cập nhật thông tin tài khoản ngân hàng thành công!";
+    }
+
     private async Task HandleSubmit()
     {
         _errorMessage = null;
 
-        // Business Validation: Case 2 (Payment <= 0)
         if (_model.Amount <= 0)
         {
             _errorMessage = "Số tiền thanh toán phải lớn hơn 0.";
@@ -428,13 +924,28 @@
         _isSubmitting = true;
         try
         {
+            // Ghi nhận phương thức thanh toán vào Note
+            string methodPrefix = _model.PaymentMethod == "BankTransfer" 
+                ? $"[Chuyển khoản VietQR - {_bankSettings.BankId} {_bankSettings.AccountNumber}]" 
+                : "[Tiền mặt]";
+
+            string finalNote = methodPrefix;
+            if (!string.IsNullOrWhiteSpace(_model.ReferenceCode))
+            {
+                finalNote += $" [Mã GD: {_model.ReferenceCode.Trim()}]";
+            }
+            if (!string.IsNullOrWhiteSpace(_model.Note))
+            {
+                finalNote += $" {_model.Note.Trim()}";
+            }
+
             var payment = new Payment
             {
                 CustomerId = _model.CustomerId,
                 PaymentNumber = _model.PaymentNumber,
                 PaymentDate = _model.PaymentDate,
                 Amount = _model.Amount,
-                Note = _model.Note
+                Note = finalNote
             };
 
             // Thực hiện ghi nhận và phân bổ FIFO thông qua RecordPaymentUseCase
@@ -464,8 +975,6 @@
         }
         catch (InvalidOperationException ex)
         {
-            // Bắt lỗi nghiệp vụ: Case 3 (Allocation vượt Invoice debt), Case 4 (Allocation vượt Payment), v.v.
-            // Hiển thị thông báo thân thiện, tuyệt đối không lộ stack trace (K3.3)
             _errorMessage = ex.Message;
         }
         catch (Exception)
@@ -489,6 +998,7 @@
         _previewAllocations.Clear();
         _totalOutstandingDebt = 0;
         _errorMessage = null;
+        _toastMessage = null;
     }
 
     private class PreviewAllocationItem

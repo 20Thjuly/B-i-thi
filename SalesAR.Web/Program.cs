@@ -98,6 +98,7 @@ builder.Services.AddScoped<IRecordPaymentUseCase, RecordPaymentUseCase>();
 builder.Services.AddScoped<IProcessPaymentUseCase, ProcessPaymentUseCase>();
 builder.Services.AddScoped<IViewPaymentsUseCase, ViewPaymentsUseCase>();
 builder.Services.AddScoped<IReallocatePaymentUseCase, ReallocatePaymentUseCase>();
+builder.Services.AddScoped<IBankSettingsService, BankSettingsService>();
 
 // 7. Aging Report Use Cases & Exporters (Scoped)
 builder.Services.AddScoped<IGetAgingReportUseCase, GetAgingReportUseCase>();
@@ -150,7 +151,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Chỉ chuyển hướng HTTPS khi không ở môi trường Development hoặc sau proxy/tunnel
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();

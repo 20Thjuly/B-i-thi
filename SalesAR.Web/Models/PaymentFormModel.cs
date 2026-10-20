@@ -19,4 +19,16 @@ public class PaymentFormModel
 
     [StringLength(500, ErrorMessage = "Ghi chú không quá 500 ký tự.")]
     public string? Note { get; set; }
+
+    /// <summary>
+    /// Phương thức thanh toán: "BankTransfer" (Chuyển khoản) hoặc "Cash" (Tiền mặt)
+    /// </summary>
+    public string PaymentMethod { get; set; } = "BankTransfer";
+
+    /// <summary>
+    /// Mã tham chiếu / mã giao dịch ngân hàng (tùy chọn)
+    /// </summary>
+    [StringLength(100, ErrorMessage = "Mã giao dịch không quá 100 ký tự.")]
+    public string? ReferenceCode { get; set; }
 }
+
