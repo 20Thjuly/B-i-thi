@@ -635,8 +635,8 @@ public class EndToEndAcceptanceBusinessTests
             Assert.False(hasAccess, $"Role '{role}' tuyệt đối không được phép truy cập Audit Log.");
         }
 
-        Assert.True(allowedRoles.Contains("ADMIN"));
-        Assert.True(allowedRoles.Contains("CREDIT_MANAGER"));
+        Assert.Contains("ADMIN", allowedRoles);
+        Assert.Contains("CREDIT_MANAGER", allowedRoles);
     }
 
     [Fact]
