@@ -1,24 +1,22 @@
 @inject IViewCustomersUseCase ViewCustomersUseCase
 
-<div class="mb-3">
-    @if (!string.IsNullOrEmpty(Label))
+@if (!string.IsNullOrEmpty(Label))
+{
+    <label class="form-label fw-semibold">@Label</label>
+}
+<select class="form-select @CssClass" value="@SelectedCustomerId" @onchange="HandleSelectionChanged">
+    <option value="0">-- Chọn khách hàng --</option>
+    @if (_customers != null)
     {
-        <label class="form-label fw-semibold">@Label</label>
-    }
-    <select class="form-select @CssClass" value="@SelectedCustomerId" @onchange="HandleSelectionChanged">
-        <option value="0">-- Chọn khách hàng --</option>
-        @if (_customers != null)
+        @foreach (var c in _customers)
         {
-            @foreach (var c in _customers)
-            {
-                <option value="@c.Id">[@c.Code] @c.Name (Hạn mức: @c.CreditLimit.ToString("N0") đ)</option>
-            }
+            <option value="@c.Id">[@c.Code] @c.Name (Hạn mức: @c.CreditLimit.ToString("N0") đ)</option>
         }
-    </select>
-</div>
+    }
+</select>
 
 @code {
-    [Parameter] public string Label { get; set; } = "Khách hàng";
+    [Parameter] public string Label { get; set; } = "";
     [Parameter] public string CssClass { get; set; } = "";
     [Parameter] public int SelectedCustomerId { get; set; }
     [Parameter] public EventCallback<int> SelectedCustomerIdChanged { get; set; }

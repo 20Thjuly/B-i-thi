@@ -91,16 +91,22 @@
                         <h5 class="card-title fw-bold text-dark mb-0">
                             <i class="bi bi-cart-check text-primary me-2"></i>2. Chi tiết Sản phẩm bán
                         </h5>
-                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddNewLine">
-                            <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm
+                        <button type="button" class="btn btn-sm btn-primary" @onclick="OpenProductMenu">
+                            <i class="bi bi-grid-3x3-gap-fill me-1"></i> Thêm sản phẩm
                         </button>
                     </div>
                     <div class="card-body p-0">
                         @if (_model.Lines.Count == 0)
                         {
-                            <div class="text-center py-4 text-muted">
-                                <i class="bi bi-basket display-6 d-block mb-2 text-secondary"></i>
-                                Chưa có sản phẩm nào trong hóa đơn. Vui lòng bấm <strong>"Thêm sản phẩm"</strong>.
+                            <div class="text-center py-5 text-muted">
+                                <div class="rounded-circle bg-light d-inline-flex p-3 mb-3">
+                                    <i class="bi bi-basket text-primary fs-1"></i>
+                                </div>
+                                <h6 class="fw-bold text-dark">Chưa có sản phẩm nào trong hóa đơn</h6>
+                                <p class="text-muted small mb-3">Nhấn vào nút bên dưới để mở Menu danh mục sản phẩm và chọn hàng</p>
+                                <button type="button" class="btn btn-primary btn-sm px-3 shadow-sm" @onclick="OpenProductMenu">
+                                    <i class="bi bi-grid-3x3-gap-fill me-1"></i> Mở Menu Sản Phẩm
+                                </button>
                             </div>
                         }
                         else
@@ -109,8 +115,8 @@
                                 <table class="table table-hover align-middle mb-0">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="min-width: 200px;">Sản phẩm</th>
-                                            <th style="width: 130px;" class="text-center">Số lượng</th>
+                                            <th style="min-width: 220px;">Sản phẩm</th>
+                                            <th style="width: 140px;" class="text-center">Số lượng</th>
                                             <th style="width: 170px;" class="text-end">Đơn giá (VNĐ)</th>
                                             <th style="width: 170px;" class="text-end">Thành tiền</th>
                                             <th style="width: 50px;" class="text-center"></th>
@@ -123,29 +129,33 @@
                                             var line = _model.Lines[idx];
                                             <tr>
                                                 <td>
-                                                    <select class="form-select form-select-sm" 
-                                                            value="@line.ProductId" 
-                                                            @onchange="(e) => OnLineProductChanged(idx, e)">
-                                                        <option value="0">-- Chọn sản phẩm --</option>
-                                                        @foreach (var prod in _availableProducts)
+                                                    <div class="fw-bold text-dark">
+                                                        @if (!string.IsNullOrEmpty(line.ProductCode))
                                                         {
-                                                            <option value="@prod.Id">
-                                                                [@prod.Code] @prod.Name (Tồn: @prod.StockQuantity)
-                                                            </option>
+                                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1">@line.ProductCode</span>
                                                         }
-                                                    </select>
+                                                        @line.ProductName
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(line.Unit))
+                                                    {
+                                                        <span class="text-muted small">ĐVT: @line.Unit</span>
+                                                    }
                                                     @if (line.ProductId <= 0)
                                                     {
-                                                        <span class="text-danger small">Vui lòng chọn sản phẩm.</span>
+                                                        <span class="text-danger small d-block mt-1">Vui lòng chọn sản phẩm.</span>
                                                     }
                                                 </td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm text-center" 
-                                                           min="1" @bind="line.Quantity" @bind:event="oninput" 
-                                                           @onchange="RecalculateTotals" />
+                                                    <div class="input-group input-group-sm">
+                                                        <button class="btn btn-outline-secondary" type="button" @onclick="() => DecreaseQuantity(idx)" title="Giảm 1">-</button>
+                                                        <input type="number" class="form-control text-center" 
+                                                               min="1" @bind="line.Quantity" @bind:event="oninput" 
+                                                               @onchange="RecalculateTotals" />
+                                                        <button class="btn btn-outline-secondary" type="button" @onclick="() => IncreaseQuantity(idx)" title="Tăng 1">+</button>
+                                                    </div>
                                                     @if (line.Quantity <= 0)
                                                     {
-                                                        <span class="text-danger small">SL &gt; 0</span>
+                                                        <span class="text-danger small d-block text-center mt-1">SL &gt; 0</span>
                                                     }
                                                 </td>
                                                 <td>
@@ -154,7 +164,7 @@
                                                            @onchange="RecalculateTotals" />
                                                     @if (line.UnitPrice < 0)
                                                     {
-                                                        <span class="text-danger small">Giá &ge; 0</span>
+                                                        <span class="text-danger small d-block text-end mt-1">Giá &ge; 0</span>
                                                     }
                                                 </td>
                                                 <td class="text-end fw-bold text-dark">
@@ -300,6 +310,156 @@
     </EditForm>
 </div>
 
+<!-- Modal Menu Danh mục Sản phẩm (Product Catalog Picker) -->
+@if (_showProductMenu)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);" role="dialog">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-white border-bottom py-3 px-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                            <i class="bi bi-grid-3x3-gap-fill fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold text-dark mb-0">Menu Sản Phẩm Bán Hàng</h5>
+                            <span class="text-muted small">Chọn sản phẩm từ danh mục kho để thêm vào hóa đơn</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" @onclick="CloseProductMenu"></button>
+                </div>
+
+                <div class="modal-body p-4 bg-light">
+                    <!-- Search input -->
+                    <div class="input-group mb-3 shadow-sm">
+                        <span class="input-group-text bg-white border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0" 
+                               placeholder="Tìm nhanh theo mã (SP001...) hoặc tên sản phẩm..." 
+                               @bind="_productSearchTerm" @bind:event="oninput" autofocus />
+                        @if (!string.IsNullOrWhiteSpace(_productSearchTerm))
+                        {
+                            <button class="btn btn-outline-secondary border-start-0 bg-white" type="button" @onclick="() => _productSearchTerm = string.Empty">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        }
+                    </div>
+
+                    <!-- Filter count -->
+                    <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                        <span class="small text-muted">
+                            Hiển thị <strong>@FilteredProducts.Count()</strong> sản phẩm khả dụng
+                        </span>
+                        @if (_model.Lines.Count > 0)
+                        {
+                            <span class="badge bg-primary-subtle text-primary">
+                                Đã thêm: @_model.Lines.Count mặt hàng
+                            </span>
+                        }
+                    </div>
+
+                    <!-- Product Table -->
+                    <div class="card border-0 shadow-sm overflow-hidden">
+                        <div class="table-responsive" style="max-height: 380px;">
+                            <table class="table table-hover align-middle mb-0 bg-white">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="min-width: 240px;">Sản phẩm</th>
+                                        <th style="width: 140px;" class="text-center">Tồn kho</th>
+                                        <th style="width: 140px;" class="text-end">Đơn giá</th>
+                                        <th style="width: 160px;" class="text-center">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (!FilteredProducts.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-center py-5 text-muted">
+                                                <i class="bi bi-search display-6 d-block mb-2 text-secondary"></i>
+                                                Không tìm thấy sản phẩm nào khớp với từ khóa "@_productSearchTerm"
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var prod in FilteredProducts)
+                                        {
+                                            var inCart = _model.Lines.FirstOrDefault(l => l.ProductId == prod.Id);
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-bold text-dark">
+                                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1">@prod.Code</span>
+                                                        @prod.Name
+                                                    </div>
+                                                    <span class="text-muted small">ĐVT: @prod.Unit</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (prod.StockQuantity <= 0)
+                                                    {
+                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Hết hàng</span>
+                                                    }
+                                                    else if (prod.StockQuantity <= 10)
+                                                    {
+                                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Sắp hết (@prod.StockQuantity)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Còn @prod.StockQuantity @prod.Unit</span>
+                                                    }
+                                                </td>
+                                                <td class="text-end fw-bold text-dark tabular-nums">
+                                                    @prod.Price.ToString("N0") đ
+                                                </td>
+                                                <td class="text-center">
+                                                    @if (prod.StockQuantity <= 0)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-light text-muted border" disabled>
+                                                            <i class="bi bi-slash-circle me-1"></i>Hết hàng
+                                                        </button>
+                                                    }
+                                                    else if (inCart != null)
+                                                    {
+                                                        <div class="d-flex align-items-center justify-content-center gap-1">
+                                                            <span class="badge bg-success me-1">x@inCart.Quantity</span>
+                                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => SelectProduct(prod)" title="Thêm tiếp 1">
+                                                                <i class="bi bi-plus-lg"></i>
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => SelectProduct(prod)">
+                                                            <i class="bi bi-cart-plus me-1"></i>Thêm vào HĐ
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-white border-top py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="text-muted small">Đã chọn:</span>
+                        <strong class="text-dark"> @_model.Lines.Count mặt hàng</strong>
+                        <span class="mx-2 text-muted">|</span>
+                        <span class="text-muted small">Tạm tính:</span>
+                        <strong class="text-primary fs-6 tabular-nums"> @_model.TotalAmount.ToString("N0") đ</strong>
+                    </div>
+                    <button type="button" class="btn btn-primary" @onclick="CloseProductMenu">
+                        <i class="bi bi-check2-circle me-1"></i>Xong &amp; Xem Hóa Đơn
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private InvoiceFormModel _model = new();
     private Customer? _selectedCustomer;
@@ -309,8 +469,67 @@
     private bool _isSubmitting = false;
 
     private List<Product> _availableProducts = new();
+    private bool _showProductMenu = false;
+    private string _productSearchTerm = "";
     private string? _errorMessage;
     private string? _successMessage;
+
+    private IEnumerable<Product> FilteredProducts => _availableProducts.Where(p => 
+        string.IsNullOrWhiteSpace(_productSearchTerm) || 
+        p.Name.Contains(_productSearchTerm, StringComparison.OrdinalIgnoreCase) || 
+        p.Code.Contains(_productSearchTerm, StringComparison.OrdinalIgnoreCase));
+
+    private void OpenProductMenu()
+    {
+        _productSearchTerm = "";
+        _showProductMenu = true;
+    }
+
+    private void CloseProductMenu()
+    {
+        _showProductMenu = false;
+        CheckCreditLimit();
+    }
+
+    private void SelectProduct(Product p)
+    {
+        var existing = _model.Lines.FirstOrDefault(l => l.ProductId == p.Id);
+        if (existing != null)
+        {
+            existing.Quantity += 1;
+        }
+        else
+        {
+            _model.Lines.Add(new InvoiceLineFormModel
+            {
+                ProductId = p.Id,
+                ProductCode = p.Code,
+                ProductName = p.Name,
+                Unit = p.Unit,
+                UnitPrice = p.Price,
+                Quantity = 1
+            });
+        }
+        CheckCreditLimit();
+    }
+
+    private void IncreaseQuantity(int index)
+    {
+        if (index >= 0 && index < _model.Lines.Count)
+        {
+            _model.Lines[index].Quantity++;
+            CheckCreditLimit();
+        }
+    }
+
+    private void DecreaseQuantity(int index)
+    {
+        if (index >= 0 && index < _model.Lines.Count && _model.Lines[index].Quantity > 1)
+        {
+            _model.Lines[index].Quantity--;
+            CheckCreditLimit();
+        }
+    }
 
     private int GetUsagePercent()
     {
@@ -328,9 +547,6 @@
     protected override async Task OnInitializedAsync()
     {
         _availableProducts = (await ViewProductsUseCase.ExecuteAsync()).Where(p => p.IsActive).ToList();
-
-        // Thêm 1 dòng trống mặc định
-        AddNewLine();
     }
 
     private async Task OnCustomerChanged(int customerId)
@@ -365,27 +581,7 @@
 
     private void AddNewLine()
     {
-        var firstProduct = _availableProducts.FirstOrDefault();
-        if (firstProduct != null)
-        {
-            _model.Lines.Add(new InvoiceLineFormModel
-            {
-                ProductId = firstProduct.Id,
-                ProductName = firstProduct.Name,
-                Quantity = 1,
-                UnitPrice = firstProduct.Price
-            });
-        }
-        else
-        {
-            _model.Lines.Add(new InvoiceLineFormModel
-            {
-                ProductId = 0,
-                Quantity = 1,
-                UnitPrice = 0
-            });
-        }
-        CheckCreditLimit();
+        OpenProductMenu();
     }
 
     private void RemoveLine(int index)
@@ -406,7 +602,9 @@
             var prod = _availableProducts.FirstOrDefault(p => p.Id == productId);
             if (prod != null)
             {
+                line.ProductCode = prod.Code;
                 line.ProductName = prod.Name;
+                line.Unit = prod.Unit;
                 line.UnitPrice = prod.Price;
             }
             CheckCreditLimit();

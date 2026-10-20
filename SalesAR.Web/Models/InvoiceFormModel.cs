@@ -27,7 +27,11 @@ public class InvoiceLineFormModel
     [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn sản phẩm.")]
     public int ProductId { get; set; }
 
+    public string ProductCode { get; set; } = string.Empty;
+
     public string ProductName { get; set; } = string.Empty;
+
+    public string Unit { get; set; } = string.Empty;
 
     [Range(1, 1000000, ErrorMessage = "Số lượng phải lớn hơn 0.")]
     public int Quantity { get; set; } = 1;
