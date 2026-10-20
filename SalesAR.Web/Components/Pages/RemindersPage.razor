@@ -1,4 +1,4 @@
-@page "/reminders"
+﻿@page "/reminders"
 @attribute [Authorize(Roles = "ADMIN,ACCOUNTANT,SALES")]
 @using SalesAR.CoreBusiness.Models
 @using SalesAR.UseCases.Reminders
@@ -383,10 +383,10 @@
                                                 break;
                                         }
                                     </td>
-                                    <td class="text-center font-monospace small">
+                                    <td class="text-center small fw-semibold text-secondary">
                                         @log.RetryCount / @log.MaxRetries
                                     </td>
-                                    <td class="font-monospace small text-muted text-truncate" style="max-width: 180px;" title="@log.IdempotencyKey">
+                                    <td class="small text-muted text-truncate font-code" style="max-width: 180px;" title="@log.IdempotencyKey">
                                         @log.IdempotencyKey
                                     </td>
                                     <td class="text-center">
@@ -440,7 +440,7 @@
                                     @r.Name
                                     <div class="text-muted small fw-normal">@r.TemplateSubject</div>
                                 </td>
-                                <td class="text-center font-monospace">
+                                <td class="text-center small fw-semibold text-secondary">
                                     @(r.DaysOffset < 0 ? $"Trước hạn {-r.DaysOffset} ngày" : $"Quá hạn {r.DaysOffset} ngày")
                                 </td>
                                 <td class="text-center">
@@ -499,7 +499,7 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-semibold small">Mã chống gửi trùng (Idempotency Key):</label>
-                                <input type="text" class="form-control bg-light font-monospace small" readonly value="@_activeDraft.IdempotencyKey" />
+                                <input type="text" class="form-control bg-light font-code small text-muted" readonly value="@_activeDraft.IdempotencyKey" />
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold small">Tiêu đề email (Subject):</label>
@@ -507,7 +507,7 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold small">Nội dung thư nhắc nợ:</label>
-                                <textarea class="form-control font-monospace" rows="12" style="font-size: 0.85rem;" @bind="_activeDraft.Body"></textarea>
+                                <textarea class="form-control reminder-email-body" rows="12" @bind="_activeDraft.Body"></textarea>
                             </div>
                         </div>
                     </div>
@@ -611,7 +611,7 @@
 
                     <div class="card border-0 shadow-sm p-3 bg-white">
                         <h6 class="fw-bold text-dark mb-2">@_activeLog.Subject</h6>
-                        <pre class="bg-light p-3 rounded text-secondary" style="white-space: pre-wrap; font-size: 0.85rem;">@_activeLog.Body</pre>
+                        <div class="reminder-pre-box">@_activeLog.Body</div>
                     </div>
                 </div>
                 <div class="modal-footer bg-white border-top py-2 px-4">

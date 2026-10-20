@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- SCRIPT 08: AUTOMATED DEBT REMINDERS WORKFLOW
 -- Đề tài: 18. Bán hàng & Công nợ Khách hàng - Sales & Accounts Receivable
 -- Hệ quản trị CSDL: Microsoft SQL Server
