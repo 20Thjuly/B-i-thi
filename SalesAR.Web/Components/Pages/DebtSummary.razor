@@ -197,7 +197,7 @@
 <!-- Modal Trợ lý AI Soạn Thư Nhắc Nợ (K4.3: Kế toán duyệt trước, AI không tự gửi / không tự đổi dữ liệu) -->
 @if (_showAiModal && _selectedDebt != null)
 {
-    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1055;">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content shadow-lg border-0">
                 <div class="modal-header bg-primary text-white">
@@ -240,7 +240,7 @@
                                 <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
                             }
                         </div>
-                        <textarea class="form-control font-monospace small" rows="12" @bind="_aiDraftEmail"></textarea>
+                        <textarea class="form-control reminder-email-body" rows="12" @bind="_aiDraftEmail"></textarea>
                     </div>
 
                     <!-- Cảnh báo An toàn & Quy chuẩn AI K4.3 -->
