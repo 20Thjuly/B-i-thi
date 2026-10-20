@@ -10,6 +10,8 @@ using SalesAR.UseCases.Invoices;
 using SalesAR.UseCases.Payments;
 using SalesAR.UseCases.PluginInterfaces;
 using SalesAR.UseCases.Products;
+using SalesAR.UseCases.Reminders;
+using SalesAR.Plugins.Reminders;
 using SalesAR.Web.Auth;
 using SalesAR.Web.Components;
 using SalesAR.Web.Services;
@@ -108,6 +110,14 @@ builder.Services.AddScoped<IViewUsersUseCase, ViewUsersUseCase>();
 builder.Services.AddScoped<ICreateUserUseCase, CreateUserUseCase>();
 builder.Services.AddScoped<IToggleUserStatusUseCase, ToggleUserStatusUseCase>();
 builder.Services.AddScoped<IViewRolesUseCase, ViewRolesUseCase>();
+
+// 11. Automated Debt Reminders (Part 6)
+builder.Services.AddScoped<IReminderRepository, ReminderRepository>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<IReminderService, ReminderService>();
+builder.Services.AddSingleton<BackgroundReminderJobScheduler>();
+builder.Services.AddSingleton<IBackgroundJobScheduler>(sp => sp.GetRequiredService<BackgroundReminderJobScheduler>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<BackgroundReminderJobScheduler>());
 
 var app = builder.Build();
 

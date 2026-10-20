@@ -18,21 +18,21 @@ public class CustomerRepository : ICustomerRepository
     public async Task<IEnumerable<Customer>> GetAllAsync()
     {
         using var connection = _connectionFactory.CreateConnection();
-        const string sql = "SELECT Id, Code, Name, Phone, Address, CreditLimit, PaymentTermDays, IsActive FROM dbo.Customers ORDER BY Code ASC;";
+        const string sql = "SELECT Id, Code, Name, Phone, Address, CreditLimit, PaymentTermDays, Email, IsInDispute, DisputeReason, SpecialAgreementNotes, IsActive FROM dbo.Customers ORDER BY Code ASC;";
         return await connection.QueryAsync<Customer>(sql);
     }
 
     public async Task<Customer?> GetByIdAsync(int id)
     {
         using var connection = _connectionFactory.CreateConnection();
-        const string sql = "SELECT Id, Code, Name, Phone, Address, CreditLimit, PaymentTermDays, IsActive FROM dbo.Customers WHERE Id = @Id;";
+        const string sql = "SELECT Id, Code, Name, Phone, Address, CreditLimit, PaymentTermDays, Email, IsInDispute, DisputeReason, SpecialAgreementNotes, IsActive FROM dbo.Customers WHERE Id = @Id;";
         return await connection.QuerySingleOrDefaultAsync<Customer>(sql, new { Id = id });
     }
 
     public async Task<Customer?> GetByCodeAsync(string code)
     {
         using var connection = _connectionFactory.CreateConnection();
-        const string sql = "SELECT Id, Code, Name, Phone, Address, CreditLimit, PaymentTermDays, IsActive FROM dbo.Customers WHERE Code = @Code;";
+        const string sql = "SELECT Id, Code, Name, Phone, Address, CreditLimit, PaymentTermDays, Email, IsInDispute, DisputeReason, SpecialAgreementNotes, IsActive FROM dbo.Customers WHERE Code = @Code;";
         return await connection.QuerySingleOrDefaultAsync<Customer>(sql, new { Code = code });
     }
 
@@ -40,9 +40,9 @@ public class CustomerRepository : ICustomerRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         const string sql = @"
-            INSERT INTO dbo.Customers (Code, Name, Phone, Address, CreditLimit, PaymentTermDays, IsActive)
+            INSERT INTO dbo.Customers (Code, Name, Phone, Address, CreditLimit, PaymentTermDays, Email, IsInDispute, DisputeReason, SpecialAgreementNotes, IsActive)
             OUTPUT INSERTED.Id
-            VALUES (@Code, @Name, @Phone, @Address, @CreditLimit, @PaymentTermDays, @IsActive);";
+            VALUES (@Code, @Name, @Phone, @Address, @CreditLimit, @PaymentTermDays, @Email, @IsInDispute, @DisputeReason, @SpecialAgreementNotes, @IsActive);";
         return await connection.ExecuteScalarAsync<int>(sql, customer);
     }
 
@@ -57,6 +57,10 @@ public class CustomerRepository : ICustomerRepository
                 Address = @Address,
                 CreditLimit = @CreditLimit,
                 PaymentTermDays = @PaymentTermDays,
+                Email = @Email,
+                IsInDispute = @IsInDispute,
+                DisputeReason = @DisputeReason,
+                SpecialAgreementNotes = @SpecialAgreementNotes,
                 IsActive = @IsActive
             WHERE Id = @Id;";
         await connection.ExecuteAsync(sql, customer);

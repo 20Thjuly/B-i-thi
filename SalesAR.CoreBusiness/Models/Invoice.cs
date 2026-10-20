@@ -9,4 +9,6 @@ public class Invoice
     public DateTime DueDate { get; set; }
     public decimal TotalAmount { get; set; }
     public string Status { get; set; } = "Unpaid";
+    public bool IsInDispute { get; set; } = false;
+    public string? DisputeReason { get; set; }
 }

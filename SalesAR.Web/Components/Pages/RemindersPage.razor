@@ -1,0 +1,892 @@
+@page "/reminders"
+@attribute [Authorize(Roles = "ADMIN,ACCOUNTANT,SALES")]
+@using SalesAR.CoreBusiness.Models
+@using SalesAR.UseCases.Reminders
+@using SalesAR.UseCases.Reminders.Models
+@inject IReminderService ReminderService
+@inject IBackgroundJobScheduler BackgroundJobScheduler
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Quy trình Nhắc nợ Tự động - SalesAR</PageTitle>
+
+<div class="container-fluid px-0">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h1 class="h3 fw-bold text-dark mb-1">
+                <i class="bi bi-bell-fill text-primary me-2"></i>Quy trình Nhắc nợ Tự động (Automated Reminders)
+            </h1>
+            <p class="text-muted small mb-0">Xác định hóa đơn sắp đến hạn/quá hạn, tạo bản nháp thông minh, kiểm soát chính sách phê duyệt và chống gửi trùng</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="d-flex align-items-center bg-white border rounded px-2 py-1 shadow-sm">
+                <span class="text-muted small me-2">Ngày đối soát:</span>
+                <input type="date" class="form-control form-control-sm border-0 p-0" style="width: 120px;" 
+                       value="@_asOfDate.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
+            </div>
+
+            <button type="button" class="btn btn-outline-primary btn-sm shadow-sm" @onclick="RefreshData" disabled="@_isLoading">
+                <i class="bi bi-arrow-clockwise me-1"></i> Làm mới
+            </button>
+
+            <AuthorizeView Roles="ADMIN,ACCOUNTANT">
+                <Authorized>
+                    <button type="button" class="btn btn-primary btn-sm shadow-sm" @onclick="TriggerBackgroundJob" disabled="@(_isJobRunning || BackgroundJobScheduler.IsJobRunning)">
+                        @if (_isJobRunning || BackgroundJobScheduler.IsJobRunning)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Đang chạy Job...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-send-check me-1"></i>
+                            <span>Quét &amp; Chạy Job Nhắc nợ</span>
+                        }
+                    </button>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </div>
+
+    <!-- Alert thông báo -->
+    @if (!string.IsNullOrEmpty(_alertMessage))
+    {
+        <div class="alert @_alertClass alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi bi-info-circle-fill me-2"></i>@_alertMessage
+            <button type="button" class="btn-close" @onclick="() => _alertMessage = null"></button>
+        </div>
+    }
+
+    <!-- 4 Thẻ KPI thống kê nhanh -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-primary border-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Khách hàng cần nhắc</div>
+                        <div class="fs-4 fw-bold text-dark mt-1">@_candidates.Count()</div>
+                    </div>
+                    <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                        <i class="bi bi-people-fill fs-5"></i>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2">
+                    <span class="text-primary fw-bold">@_candidates.Sum(c => c.Invoices.Count)</span> hóa đơn cần thu hồi
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-warning border-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Chờ duyệt thủ công</div>
+                        <div class="fs-4 fw-bold text-warning mt-1">@_reminderLogs.Count(l => l.Status == "PendingApproval")</div>
+                    </div>
+                    <div class="rounded-circle bg-warning-subtle text-warning d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                        <i class="bi bi-hourglass-split fs-5"></i>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2">
+                    Cần Kế toán / Quản lý xác nhận
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-danger border-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Tạm dừng (Tranh chấp)</div>
+                        <div class="fs-4 fw-bold text-danger mt-1">@_candidates.Count(c => c.IsInDispute)</div>
+                    </div>
+                    <div class="rounded-circle bg-danger-subtle text-danger d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                        <i class="bi bi-pause-circle-fill fs-5"></i>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2">
+                    Bảo vệ quan hệ đối tác
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 border-start border-success border-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Đã gửi hôm nay</div>
+                        <div class="fs-4 fw-bold text-success mt-1">@_reminderLogs.Count(l => l.Status == "Sent" && l.SentAt?.Date == DateTime.Today)</div>
+                    </div>
+                    <div class="rounded-circle bg-success-subtle text-success d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                        <i class="bi bi-check-circle-fill fs-5"></i>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2">
+                    Chống trùng bằng Idempotency
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thanh điều hướng Tab -->
+    <ul class="nav nav-pills mb-3 gap-2">
+        <li class="nav-item">
+            <button class="nav-link @_activeTabClass("candidates")" @onclick='() => _activeTab = "candidates"'>
+                <i class="bi bi-list-check me-1"></i> Danh sách Cần nhắc nợ (@_candidates.Count())
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @_activeTabClass("logs")" @onclick='() => _activeTab = "logs"'>
+                <i class="bi bi-clock-history me-1"></i> Lịch sử &amp; Nhật ký Gửi (@_reminderLogs.Count())
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @_activeTabClass("rules")" @onclick='() => _activeTab = "rules"'>
+                <i class="bi bi-gear-fill me-1"></i> Quy tắc Nhắc nợ (@_reminderRules.Count())
+            </button>
+        </li>
+    </ul>
+
+    <!-- Nội dung Tab 1: Danh sách Cần nhắc nợ -->
+    @if (_activeTab == "candidates")
+    {
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="card-title fw-bold text-dark mb-0 fs-6">
+                    <i class="bi bi-envelope-paper text-primary me-2"></i>Danh sách Khách hàng &amp; Hóa đơn Đến hạn / Quá hạn
+                </h5>
+                <span class="text-muted small">Tự động phân nhóm theo mốc quá hạn và gắn quy tắc xử lý phù hợp</span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="min-width: 200px;">Khách hàng</th>
+                            <th style="min-width: 180px;">Quy tắc áp dụng</th>
+                            <th style="width: 140px;" class="text-center">Số ngày quá hạn</th>
+                            <th style="width: 160px;" class="text-end">Tổng nợ đối soát</th>
+                            <th style="width: 150px;" class="text-center">Chính sách gửi</th>
+                            <th style="width: 160px;" class="text-center">Trạng thái</th>
+                            <th style="width: 170px;" class="text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_isLoading)
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center py-5">
+                                    <span class="spinner-border text-primary" role="status"></span>
+                                    <div class="text-muted small mt-2">Đang tải danh sách công nợ...</div>
+                                </td>
+                            </tr>
+                        }
+                        else if (!_candidates.Any())
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">
+                                    <i class="bi bi-shield-check display-6 d-block mb-2 text-success"></i>
+                                    Không có khách hàng nào đến mốc cần nhắc nợ tính đến ngày <strong>@_asOfDate.ToString("dd/MM/yyyy")</strong>.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var c in _candidates)
+                            {
+                                <tr class="@(c.IsInDispute ? "table-danger-subtle" : "")">
+                                    <td>
+                                        <div class="fw-bold text-dark">
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1">@c.CustomerCode</span>
+                                            @c.CustomerName
+                                        </div>
+                                        <div class="text-muted small">
+                                            <i class="bi bi-envelope me-1"></i>@c.RecipientEmail
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold text-dark">@c.RuleName</span>
+                                        <div class="small text-muted">Văn phong: <strong class="text-capitalize">@c.Tone</strong></div>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (c.MaxDaysOverdue > 30)
+                                        {
+                                            <span class="badge bg-danger">Quá hạn @c.MaxDaysOverdue ngày</span>
+                                        }
+                                        else if (c.MaxDaysOverdue > 0)
+                                        {
+                                            <span class="badge bg-warning text-dark">Quá hạn @c.MaxDaysOverdue ngày</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-info text-dark">Đến hạn trong @c.MinDaysUntilDue ngày</span>
+                                        }
+                                    </td>
+                                    <td class="text-end fw-bold text-dark tabular-nums">
+                                        @c.TotalDebtAmount.ToString("N0") đ
+                                        <div class="text-muted small fw-normal">(@c.Invoices.Count HĐ)</div>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (c.AutoSendApproved)
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                                <i class="bi bi-lightning-charge me-1"></i>Tự động gửi
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                                                <i class="bi bi-shield-lock me-1"></i>Cần duyệt
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @if (c.IsInDispute)
+                                        {
+                                            <span class="badge bg-danger" title="@c.DisputeReason">
+                                                <i class="bi bi-exclamation-octagon me-1"></i>Tranh chấp
+                                            </span>
+                                        }
+                                        else if (c.AlreadySentToday)
+                                        {
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-all me-1"></i>Đã gửi hôm nay
+                                            </span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(c.LastLogStatus))
+                                        {
+                                            <span class="badge bg-secondary">@c.LastLogStatus</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Sẵn sàng</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-primary" @onclick="() => OpenDraftModal(c)" title="Xem bản nháp / Gửi">
+                                                <i class="bi bi-pencil-square me-1"></i>Bản nháp
+                                            </button>
+                                            @if (c.IsInDispute)
+                                            {
+                                                <button type="button" class="btn btn-outline-success" @onclick="() => ResolveDispute(c)" title="Bỏ tạm dừng, khôi phục nhắc nợ">
+                                                    <i class="bi bi-play-circle"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-outline-danger" @onclick="() => OpenDisputeModal(c)" title="Tạm dừng nhắc nợ do tranh chấp">
+                                                    <i class="bi bi-pause-circle"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- Nội dung Tab 2: Lịch sử & Nhật ký Gửi (ReminderLogs) -->
+    @if (_activeTab == "logs")
+    {
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="card-title fw-bold text-dark mb-0 fs-6">
+                    <i class="bi bi-clock-history text-primary me-2"></i>Nhật ký Gửi Thư Nhắc Nợ (Audit Logs &amp; Retries)
+                </h5>
+                <div class="d-flex gap-2">
+                    <select class="form-select form-select-sm" style="width: 170px;" @bind="_logStatusFilter" @bind:after="FilterLogs">
+                        <option value="">-- Tất cả trạng thái --</option>
+                        <option value="Sent">Đã gửi (Sent)</option>
+                        <option value="PendingApproval">Chờ duyệt (Pending)</option>
+                        <option value="RetryPending">Chờ thử lại (Retry)</option>
+                        <option value="Failed">Thất bại (Failed)</option>
+                        <option value="PausedDispute">Tranh chấp (Paused)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 160px;">Thời gian</th>
+                            <th style="min-width: 180px;">Khách hàng</th>
+                            <th style="min-width: 220px;">Tiêu đề thư</th>
+                            <th style="width: 130px;" class="text-center">Trạng thái</th>
+                            <th style="width: 110px;" class="text-center">Lần thử</th>
+                            <th style="min-width: 180px;">Idempotency Key</th>
+                            <th style="width: 120px;" class="text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!_filteredLogs.Any())
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">
+                                    Chưa có nhật ký nhắc nợ nào phù hợp.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var log in _filteredLogs)
+                            {
+                                <tr>
+                                    <td class="small">
+                                        <div>@log.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                                        @if (log.SentAt.HasValue)
+                                        {
+                                            <span class="text-success small">Gửi: @log.SentAt.Value.ToLocalTime().ToString("HH:mm")</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold text-dark">@log.CustomerName</div>
+                                        <span class="text-muted small">@log.RecipientEmail</span>
+                                    </td>
+                                    <td>
+                                        <div class="text-truncate fw-semibold" style="max-width: 250px;" title="@log.Subject">
+                                            @log.Subject
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(log.LastError))
+                                        {
+                                            <div class="text-danger small text-truncate" style="max-width: 250px;" title="@log.LastError">
+                                                <i class="bi bi-exclamation-circle me-1"></i>@log.LastError
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @switch (log.Status)
+                                        {
+                                            case "Sent":
+                                                <span class="badge bg-success">Đã gửi</span>
+                                                break;
+                                            case "PendingApproval":
+                                                <span class="badge bg-warning text-dark">Chờ duyệt</span>
+                                                break;
+                                            case "RetryPending":
+                                                <span class="badge bg-info text-dark">Chờ thử lại</span>
+                                                break;
+                                            case "Failed":
+                                                <span class="badge bg-danger">Thất bại</span>
+                                                break;
+                                            case "PausedDispute":
+                                                <span class="badge bg-secondary">Tạm dừng (Tranh chấp)</span>
+                                                break;
+                                            default:
+                                                <span class="badge bg-light text-dark border">@log.Status</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td class="text-center font-monospace small">
+                                        @log.RetryCount / @log.MaxRetries
+                                    </td>
+                                    <td class="font-monospace small text-muted text-truncate" style="max-width: 180px;" title="@log.IdempotencyKey">
+                                        @log.IdempotencyKey
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="() => ViewLogDetails(log)" title="Xem chi tiết">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            @if (log.Status == "RetryPending" || log.Status == "Failed" || log.Status == "PendingApproval")
+                                            {
+                                                <button type="button" class="btn btn-outline-primary" @onclick="() => RetryLog(log)" title="Gửi / Thử lại ngay">
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- Nội dung Tab 3: Cấu hình Quy tắc Nhắc nợ -->
+    @if (_activeTab == "rules")
+    {
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+            <div class="card-header bg-white py-3 border-0">
+                <h5 class="card-title fw-bold text-dark mb-0 fs-6">
+                    <i class="bi bi-sliders text-primary me-2"></i>Quy chế &amp; Mốc Kích hoạt Nhắc nợ (Reminder Rules)
+                </h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="min-width: 220px;">Tên Quy tắc</th>
+                            <th style="width: 140px;" class="text-center">Mốc kích hoạt</th>
+                            <th style="width: 140px;" class="text-center">Loại</th>
+                            <th style="width: 130px;" class="text-center">Văn phong</th>
+                            <th style="width: 180px;" class="text-center">Chính sách gửi tự động</th>
+                            <th style="width: 120px;" class="text-center">Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _reminderRules)
+                        {
+                            <tr>
+                                <td class="fw-bold text-dark">
+                                    @r.Name
+                                    <div class="text-muted small fw-normal">@r.TemplateSubject</div>
+                                </td>
+                                <td class="text-center font-monospace">
+                                    @(r.DaysOffset < 0 ? $"Trước hạn {-r.DaysOffset} ngày" : $"Quá hạn {r.DaysOffset} ngày")
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-dark border">@r.TriggerType</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle text-capitalize">@r.Tone</span>
+                                </td>
+                                <td class="text-center">
+                                    @if (r.AutoSendApproved)
+                                    {
+                                        <span class="badge bg-success">Cho phép gửi tự động</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">Bắt buộc duyệt trước</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Hoạt động</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal 1: Soạn & Xem Bản nháp Thư Nhắc Nợ -->
+@if (_showDraftModal && _activeDraft != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);" role="dialog">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-white border-bottom py-3 px-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                            <i class="bi bi-envelope-paper-fill fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold text-dark mb-0">Bản nháp Thư Nhắc Nợ</h5>
+                            <span class="text-muted small">Khách hàng: <strong>@_activeDraft.CustomerName</strong> (@_activeDraft.CustomerCode)</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" @onclick="() => _showDraftModal = false"></button>
+                </div>
+
+                <div class="modal-body p-4 bg-light">
+                    <div class="card border-0 shadow-sm p-3 mb-3 bg-white">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold small">Người nhận (Email):</label>
+                                <input type="email" class="form-control" @bind="_activeDraft.RecipientEmail" />
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-semibold small">Mã chống gửi trùng (Idempotency Key):</label>
+                                <input type="text" class="form-control bg-light font-monospace small" readonly value="@_activeDraft.IdempotencyKey" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold small">Tiêu đề email (Subject):</label>
+                                <input type="text" class="form-control fw-bold" @bind="_activeDraft.Subject" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold small">Nội dung thư nhắc nợ:</label>
+                                <textarea class="form-control font-monospace" rows="12" style="font-size: 0.85rem;" @bind="_activeDraft.Body"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info py-2 px-3 small mb-0">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        Hệ thống kiểm soát: Nếu đã gửi thành công trong ngày hôm nay, mã Idempotency sẽ ngăn chặn việc gửi lặp.
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-white border-top py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="text-muted small">Tổng công nợ đối soát:</span>
+                        <strong class="text-primary fs-6 tabular-nums"> @_activeDraft.TotalDebtAmount.ToString("N0") đ</strong>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => _showDraftModal = false">
+                            Đóng
+                        </button>
+                        <button type="button" class="btn btn-primary" @onclick="SendDraftEmail" disabled="@_isSendingDraft">
+                            @if (_isSendingDraft)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>Đang gửi...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-send-fill me-1"></i>
+                                <span>Xác nhận &amp; Gửi Email Ngay</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 2: Quản lý Tranh Chấp (Dispute Suspension) -->
+@if (_showDisputeModal && _disputeTarget != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);" role="dialog">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-white border-bottom py-3 px-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle bg-danger-subtle text-danger d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                            <i class="bi bi-exclamation-triangle-fill fs-6"></i>
+                        </div>
+                        <h5 class="modal-title fw-bold text-dark mb-0 fs-6">Tạm dừng nhắc nợ do tranh chấp</h5>
+                    </div>
+                    <button type="button" class="btn-close" @onclick="() => _showDisputeModal = false"></button>
+                </div>
+                <div class="modal-body p-4 bg-white">
+                    <p class="text-secondary small mb-3">
+                        Khách hàng: <strong>@_disputeTarget.CustomerName</strong> (@_disputeTarget.CustomerCode).<br>
+                        Khi đánh dấu tranh chấp, hệ thống sẽ <strong>tạm dừng toàn bộ các tiến trình nhắc nợ tự động</strong> cho đến khi có thỏa thuận mới.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Lý do tranh chấp / Thỏa thuận đặc biệt <span class="text-danger">*</span>:</label>
+                        <textarea class="form-control" rows="3" placeholder="Nhập lý do (vd: Đang khiếu nại chất lượng hàng hóa, chờ đổi trả hàng...)" @bind="_disputeReasonInput"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top py-3 px-4">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _showDisputeModal = false">Hủy bỏ</button>
+                    <button type="button" class="btn btn-danger btn-sm" @onclick="ConfirmPauseDispute" disabled="@string.IsNullOrWhiteSpace(_disputeReasonInput)">
+                        <i class="bi bi-pause-circle me-1"></i>Xác nhận Tạm dừng
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 3: Chi tiết Nhật ký (Log Details Modal) -->
+@if (_showLogModal && _activeLog != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);" role="dialog">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-white border-bottom py-3 px-4">
+                    <h5 class="modal-title fw-bold text-dark mb-0 fs-6">
+                        <i class="bi bi-file-earmark-text text-primary me-2"></i>Chi tiết Nhật ký Nhắc Nợ #@_activeLog.Id
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showLogModal = false"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <div class="card border-0 shadow-sm p-3 bg-white mb-3">
+                        <div class="row g-2 small">
+                            <div class="col-6 col-md-3"><strong>Khách hàng:</strong> @_activeLog.CustomerName</div>
+                            <div class="col-6 col-md-3"><strong>Email:</strong> @_activeLog.RecipientEmail</div>
+                            <div class="col-6 col-md-3"><strong>Trạng thái:</strong> <span class="badge bg-primary">@_activeLog.Status</span></div>
+                            <div class="col-6 col-md-3"><strong>Số lần thử:</strong> @_activeLog.RetryCount / @_activeLog.MaxRetries</div>
+                            <div class="col-12"><strong>Idempotency:</strong> <code>@_activeLog.IdempotencyKey</code></div>
+                            @if (!string.IsNullOrEmpty(_activeLog.LastError))
+                            {
+                                <div class="col-12 text-danger"><strong>Lỗi:</strong> @_activeLog.LastError</div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card border-0 shadow-sm p-3 bg-white">
+                        <h6 class="fw-bold text-dark mb-2">@_activeLog.Subject</h6>
+                        <pre class="bg-light p-3 rounded text-secondary" style="white-space: pre-wrap; font-size: 0.85rem;">@_activeLog.Body</pre>
+                    </div>
+                </div>
+                <div class="modal-footer bg-white border-top py-2 px-4">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => _showLogModal = false">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DateTime _asOfDate = DateTime.Today;
+    private string _activeTab = "candidates";
+    private bool _isLoading = false;
+    private bool _isJobRunning = false;
+    private string? _alertMessage;
+    private string _alertClass = "alert-success";
+
+    private List<DebtReminderCandidateDto> _candidates = new();
+    private List<ReminderLog> _reminderLogs = new();
+    private List<ReminderLog> _filteredLogs = new();
+    private List<ReminderRule> _reminderRules = new();
+
+    private string _logStatusFilter = "";
+
+    // State cho Modal Draft
+    private bool _showDraftModal = false;
+    private ReminderDraftDto? _activeDraft;
+    private bool _isSendingDraft = false;
+
+    // State cho Modal Dispute
+    private bool _showDisputeModal = false;
+    private DebtReminderCandidateDto? _disputeTarget;
+    private string _disputeReasonInput = "";
+
+    // State cho Modal Log
+    private bool _showLogModal = false;
+    private ReminderLog? _activeLog;
+
+    private string _activeTabClass(string tab) => _activeTab == tab ? "btn-primary active text-white" : "btn-light text-dark border";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            _asOfDate = dt;
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        _isLoading = true;
+        try
+        {
+            var candidatesTask = ReminderService.IdentifyReminderCandidatesAsync(_asOfDate);
+            var logsTask = ReminderService.GetReminderLogsAsync();
+            var rulesTask = ReminderService.GetReminderRulesAsync();
+
+            await Task.WhenAll(candidatesTask, logsTask, rulesTask);
+
+            _candidates = (await candidatesTask).ToList();
+            _reminderLogs = (await logsTask).ToList();
+            _reminderRules = (await rulesTask).ToList();
+            FilterLogs();
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi tải dữ liệu nhắc nợ: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void FilterLogs()
+    {
+        if (string.IsNullOrWhiteSpace(_logStatusFilter))
+        {
+            _filteredLogs = _reminderLogs.ToList();
+        }
+        else
+        {
+            _filteredLogs = _reminderLogs.Where(l => l.Status == _logStatusFilter).ToList();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+        _alertMessage = "Đã làm mới dữ liệu đối soát nợ thành công.";
+        _alertClass = "alert-success";
+    }
+
+    private async Task TriggerBackgroundJob()
+    {
+        _isJobRunning = true;
+        _alertMessage = null;
+
+        try
+        {
+            await BackgroundJobScheduler.TriggerDueRemindersJobAsync();
+            await LoadData();
+            _alertMessage = BackgroundJobScheduler.LastRunResult ?? "Job nhắc nợ đã thực thi xong.";
+            _alertClass = "alert-success";
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi kích hoạt Job: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+        finally
+        {
+            _isJobRunning = false;
+        }
+    }
+
+    private async Task OpenDraftModal(DebtReminderCandidateDto candidate)
+    {
+        _activeDraft = await ReminderService.GenerateReminderDraftAsync(
+            candidate.CustomerId,
+            candidate.Invoices.Select(i => i.Id).ToList(),
+            candidate.ReminderRuleId,
+            _asOfDate);
+        _showDraftModal = true;
+    }
+
+    private async Task SendDraftEmail()
+    {
+        if (_activeDraft == null) return;
+
+        _isSendingDraft = true;
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var currentUser = authState.User?.Identity?.Name ?? "Admin";
+
+            var result = await ReminderService.QueueOrSendReminderAsync(_activeDraft, confirmedBy: currentUser, forceSend: true);
+
+            _showDraftModal = false;
+            await LoadData();
+
+            if (result.Status == "Sent")
+            {
+                _alertMessage = $"Đã gửi email nhắc nợ thành công tới {_activeDraft.RecipientEmail}!";
+                _alertClass = "alert-success";
+            }
+            else
+            {
+                _alertMessage = $"Gửi email không thành công: {result.LastError}. Hệ thống đã đưa vào hàng đợi retry ({result.Status}).";
+                _alertClass = "alert-warning";
+            }
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi gửi thư: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+        finally
+        {
+            _isSendingDraft = false;
+        }
+    }
+
+    private void OpenDisputeModal(DebtReminderCandidateDto candidate)
+    {
+        _disputeTarget = candidate;
+        _disputeReasonInput = candidate.DisputeReason ?? "Khách hàng khiếu nại về đối soát công nợ / chất lượng sản phẩm.";
+        _showDisputeModal = true;
+    }
+
+    private async Task ConfirmPauseDispute()
+    {
+        if (_disputeTarget == null || string.IsNullOrWhiteSpace(_disputeReasonInput)) return;
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var currentUser = authState.User?.Identity?.Name ?? "Admin";
+
+            // Tạo draft tạm để lưu log tranh chấp nếu chưa có
+            var draft = await ReminderService.GenerateReminderDraftAsync(_disputeTarget.CustomerId, _disputeTarget.Invoices.Select(i => i.Id).ToList(), _disputeTarget.ReminderRuleId, _asOfDate);
+            _disputeTarget.IsInDispute = true;
+            _disputeTarget.DisputeReason = _disputeReasonInput;
+
+            await ReminderService.QueueOrSendReminderAsync(draft, confirmedBy: currentUser);
+            _showDisputeModal = false;
+            await LoadData();
+
+            _alertMessage = $"Đã tạm dừng nhắc nợ đối với khách hàng {_disputeTarget.CustomerName}.";
+            _alertClass = "alert-info";
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi tạm dừng tranh chấp: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+    }
+
+    private async Task ResolveDispute(DebtReminderCandidateDto candidate)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var currentUser = authState.User?.Identity?.Name ?? "Admin";
+
+            // Tìm log tranh chấp gần nhất nếu có
+            var latestLog = _reminderLogs.FirstOrDefault(l => l.CustomerId == candidate.CustomerId && l.Status == "PausedDispute");
+            if (latestLog != null)
+            {
+                await ReminderService.ResumeReminderFromDisputeAsync(latestLog.Id, currentUser);
+            }
+            else
+            {
+                // Gọi repository qua service để reset trạng thái
+                candidate.IsInDispute = false;
+                candidate.DisputeReason = null;
+            }
+
+            await LoadData();
+            _alertMessage = $"Đã khôi phục trạng thái nhắc nợ cho khách hàng {candidate.CustomerName}.";
+            _alertClass = "alert-success";
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi khôi phục: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+    }
+
+    private void ViewLogDetails(ReminderLog log)
+    {
+        _activeLog = log;
+        _showLogModal = true;
+    }
+
+    private async Task RetryLog(ReminderLog log)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var currentUser = authState.User?.Identity?.Name ?? "Admin";
+
+            var draft = new ReminderDraftDto
+            {
+                CustomerId = log.CustomerId,
+                CustomerName = log.CustomerName ?? "",
+                RecipientEmail = log.RecipientEmail,
+                ReminderRuleId = log.ReminderRuleId,
+                Subject = log.Subject,
+                Body = log.Body,
+                TotalDebtAmount = log.TotalDebtAmount,
+                IdempotencyKey = log.IdempotencyKey,
+                AutoSendApproved = true
+            };
+
+            var res = await ReminderService.QueueOrSendReminderAsync(draft, confirmedBy: currentUser, forceSend: true);
+            await LoadData();
+
+            _alertMessage = res.Status == "Sent" 
+                ? $"Đã gửi lại thành công tới {log.RecipientEmail}!" 
+                : $"Thử lại thất bại: {res.LastError}";
+            _alertClass = res.Status == "Sent" ? "alert-success" : "alert-warning";
+        }
+        catch (Exception ex)
+        {
+            _alertMessage = $"Lỗi thử lại: {ex.Message}";
+            _alertClass = "alert-danger";
+        }
+    }
+}

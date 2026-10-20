@@ -9,5 +9,9 @@ public class Customer
     public string Address { get; set; } = string.Empty;
     public decimal CreditLimit { get; set; }
     public int PaymentTermDays { get; set; }
+    public string? Email { get; set; }
+    public bool IsInDispute { get; set; } = false;
+    public string? DisputeReason { get; set; }
+    public string? SpecialAgreementNotes { get; set; }
     public bool IsActive { get; set; } = true;
 }
