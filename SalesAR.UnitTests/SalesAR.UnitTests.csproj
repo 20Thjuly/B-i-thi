@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SalesAR.CoreBusiness\SalesAR.CoreBusiness.csproj" />
     <ProjectReference Include="..\SalesAR.UseCases\SalesAR.UseCases.csproj" />
+    <ProjectReference Include="..\Plugins\SalesAR.Plugins\SalesAR.Plugins.csproj" />
     <ProjectReference Include="..\SalesAR.Web\SalesAR.Web.csproj" />
   </ItemGroup>
 

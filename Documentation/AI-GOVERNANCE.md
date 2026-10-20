@@ -136,21 +136,22 @@ $\rightarrow$ `GeminiAiProvider` **tự động chuyển tiếp mượt mà** sa
 
 ---
 
-## 6. Tổng Kết Kiểm Thử & Nghiệm Thu (Unit Test Suite)
+## 6. Tổng Kết Kiểm Thử & Nghiệm Thu (Unit & Integration Test Suite)
 
-Toàn bộ **74/74 unit tests** đã vượt qua thành công:
+Toàn bộ **102/102 tests** đã vượt qua thành công:
 
 | Bộ Kiểm Thử | Số Lượng Tests | Trạng Thái | Mô Tả Phạm Vi Kiểm Tra |
 | :--- | :---: | :---: | :--- |
-| [`AiAssistanceTests.cs`](file:///d:/Lập%20trình%20web/BÀI%20THI/SalesAR.UnitTests/AiAssistanceTests.cs) | **11 tests** | **100% PASSED** | Phân định GroundTruth / AiNarrative, Phát hiện cảnh báo rủi ro, Chấm điểm rủi ro các mức, Ràng buộc tranh chấp, Rào cản Guardrails không sửa hạn mức, Soạn thảo thư 3 giọng điệu, Khử nhạy cảm PII, Fallback khi mất kết nối. |
-| Các module PART 1 $\rightarrow$ PART 7 | **63 tests** | **100% PASSED** | Bán hàng, FIFO thanh toán, Duyệt hạn mức tín dụng, Báo cáo tuổi nợ, Nhắc nợ tự động, AR Dashboard & Dự báo dòng tiền. |
-| **Tổng cộng toàn hệ thống** | **74 tests** | **100% PASSED** | **Thời gian thực thi: 0.622 giây** |
+| [`AiAssistanceTests.cs`](file:///d:/Lập%20trình%20web/BÀI%20THI/SalesAR.UnitTests/AiAssistanceTests.cs) | **10 tests** | **100% PASSED** | Phân định GroundTruth / AiNarrative, Phát hiện cảnh báo rủi ro, Chấm điểm rủi ro các mức, Ràng buộc tranh chấp, Rào cản Guardrails không sửa hạn mức, Soạn thảo thư 3 giọng điệu, Khử nhạy cảm PII, Fallback khi mất kết nối. |
+| `EndToEndAcceptanceBusinessTests.cs` (Scenario 13) | **1 test** | **100% PASSED** | Kiểm chứng cơ chế Graceful Fallback của AI không làm gián đoạn luồng nghiệp vụ lõi. |
+| Các module nghiệp vụ khác | **91 tests** | **100% PASSED** | Bán hàng, FIFO thanh toán, Duyệt hạn mức tín dụng, Nhắc nợ tự động, AR Dashboard, Phân quyền RBAC, SQL Server Concurrency. |
+| **Tổng cộng toàn hệ thống** | **102 tests** | **100% PASSED** | **Thời gian thực thi: ~2.4 giây** |
 
 ---
 
 ## 7. Hướng Dẫn Truy Cập Giao Diện Trợ Lý AI
 
-1. Đăng nhập hệ thống với tài khoản kế toán (`accountant` / `admin`).
+1. Đăng nhập hệ thống với tài khoản được phân quyền (`accountant`, `creditmanager`, hoặc `admin`).
 2. Nhấp vào menu **"Trợ lý AI Công nợ"** trên thanh điều hướng bên trái hoặc truy cập URL:
    - `https://localhost:7167/ai-assistance`
    - `http://localhost:5182/ai-assistance`
@@ -158,3 +159,15 @@ Toàn bộ **74/74 unit tests** đã vượt qua thành công:
    - **Thẻ 1**: Tóm tắt & Sức khỏe công nợ (Đối chiếu số liệu thật với phân tích AI).
    - **Thẻ 2**: Chấm điểm rủi ro tín dụng (Đồng hồ điểm số, yếu tố giải thích và rào cản thẩm quyền).
    - **Thẻ 3**: Soạn thảo thư nhắc nợ AI (Tùy chọn giọng điệu, xem và sửa trực tiếp nội dung, xác nhận chính sách trước khi gửi).
+
+## 8. Hướng Dẫn Cấu Hình API Key Google Gemini (Tùy Chọn)
+Trong file `SalesAR.Web/appsettings.json`:
+```json
+"AI": {
+  "Provider": "Gemini",
+  "ApiKey": "YOUR_GEMINI_API_KEY_HERE",
+  "Model": "gemini-1.5-flash",
+  "TimeoutSeconds": 15
+}
+```
+*Lưu ý: Nếu không cấu hình API Key, hệ thống tự động chạy chế độ `LocalHeuristicAiProvider` (Nội bộ không cần Internet).*

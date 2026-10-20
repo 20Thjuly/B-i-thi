@@ -1,10 +1,11 @@
 # 🏛 KIẾN TRÚC HỆ THỐNG CHUẨN MỰC (CLEAN ARCHITECTURE FOUNDATION)
-## ĐỒ ÁN: 18. BÁN HÀNG & CÔNG NỢ KHÁCH HÀNG (SALES & ACCOUNTS RECEIVABLE)
+## ĐỒ ÁN MÔN HỌC: LẬP TRÌNH WEB
+### ĐỀ TÀI SỐ 18: BÁN HÀNG & CÔNG NỢ KHÁCH HÀNG (SALES & ACCOUNTS RECEIVABLE)
 
-> **Mã quy trình**: `PART 2/10 — CLEAN ARCHITECTURE FOUNDATION`  
-> **Phiên bản kiến trúc**: 2.0 (Clean Architecture & Plugin Pattern)  
-> **Nền tảng**: .NET 8.0 LTS • C# 12 • ASP.NET Core Blazor Server (InteractiveServer) • Microsoft SQL Server  
-> **Trạng thái**: Đã chuẩn hóa toàn diện, 100% Component gọi UseCase, 0 lỗi biên dịch, 20/20 Test Passed.
+> **Mã quy trình**: `PART 10/10 — FINAL ARCHITECTURAL SPECIFICATION`  
+> **Phiên bản kiến trúc**: 3.0 (Clean Architecture, Domain-Driven Design & Plugin Pattern)  
+> **Nền tảng**: .NET 8.0 LTS • C# 12 • ASP.NET Core Blazor Server (InteractiveServer) • Microsoft SQL Server • Dapper  
+> **Trạng thái**: Đã chuẩn hóa toàn diện 10/10 Parts • 100% Component gọi UseCase • 0 Lỗi biên dịch • 102/102 Tests Passed
 
 ---
 
@@ -15,32 +16,41 @@ Hệ thống được tổ chức thành 4 project cốt lõi theo mô hình **O
 ```
 Solution: SalesAR.sln
 │
-├── 🟢 SalesAR.CoreBusiness/       [TẦNG 1: DOMAIN ENTITIES & SECURITY CONCEPTS]
-│   └── Trách nhiệm: Chứa các thực thể nghiệp vụ trung tâm và quy chuẩn băm mật khẩu.
-│       Độc lập tuyệt đối, không tham chiếu bất kỳ project hay thư viện bên ngoài nào.
+├── 🟢 SalesAR.CoreBusiness/       [TẦNG 1: DOMAIN ENTITIES & VALUE OBJECTS]
+│   └── Trách nhiệm: Chứa các thực thể trung tâm, hằng số, Enum và công cụ mã hóa bảo mật.
+│       Độc lập tuyệt đối, 0 ProjectReference và 0 PackageReference ngoài.
+│       File: Customer.cs, Invoice.cs, InvoiceLine.cs, Payment.cs, PaymentAllocation.cs,
+│             CreditLimitRequest.cs, CreditLimitApproval.cs, ReminderRule.cs, ReminderLog.cs,
+│             DebtAdjustment.cs, AuditLog.cs, User.cs, Role.cs, PasswordHasher.cs.
 │
 ├── 🔵 SalesAR.UseCases/           [TẦNG 2: APPLICATION BUSINESS RULES & CONTRACTS]
-│   └── Trách nhiệm: Điều phối toàn bộ luồng nghiệp vụ (Hạn mức nợ, Phân bổ FIFO, Tuổi nợ, Xác thực).
-│       Chứa thư mục PluginInterfaces/ định nghĩa các hợp đồng Repository trừu tượng.
-│       Chỉ tham chiếu duy nhất SalesAR.CoreBusiness.
+│   └── Trách nhiệm: Điều phối toàn bộ quy trình nghiệp vụ (Kiểm soát hạn mức tín dụng,
+│       phân bổ thanh toán FIFO, tính toán tuổi nợ Aging, quy trình phê duyệt hạn mức,
+│       bộ quy tắc nhắc nợ tự động, tính toán 10 KPI Dashboard, AI Copilot Grounding).
+│       Chứa thư mục PluginInterfaces/ định nghĩa hợp đồng trừu tượng cho Repository.
+│       Chỉ phụ thuộc DUY NHẤT SalesAR.CoreBusiness.
 │
-├── 🟡 Plugins/SalesAR.Plugins/    [TẦNG 3: INFRASTRUCTURE & DATA ACCESS ADAPTERS]
-│   └── Trách nhiệm: Hiện thực hóa các interface Repository bằng Dapper và ADO.NET SQL Server.
-│       Quản lý kết nối CSDL, Transaction cấn trừ nợ và xuất nhập kho.
-│       Tham chiếu SalesAR.CoreBusiness và SalesAR.UseCases.
+├── 🟡 Plugins/SalesAR.Plugins/    [TẦNG 3: INFRASTRUCTURE, DATA ACCESS & EXTERNAL ADAPTERS]
+│   └── Trách nhiệm: Hiện thực hóa các interface Repository bằng Dapper và Microsoft SQL Server.
+│       Quản lý kết nối SqlConnectionFactory, Transaction cấn trừ nợ nguyên khối (ACID).
+│       Dịch vụ nền nhắc nợ tự động (BackgroundReminderJobScheduler kế thừa IHostedService).
+│       Adapter AI (GeminiAiProvider & LocalHeuristicAiProvider fallback).
+│       Chỉ tham chiếu SalesAR.CoreBusiness và SalesAR.UseCases.
 │
 ├── 🟣 SalesAR.Web/                [TẦNG 4: PRESENTATION & COMPOSITION ROOT]
-│   └── Trách nhiệm: Giao diện người dùng Blazor Server, Cookie Authentication, Minimal APIs.
-│       Đóng vai trò Composition Root để đăng ký Dependency Injection cho toàn hệ thống.
-│       Giao diện (.razor) CHỈ giao tiếp với hệ thống thông qua UseCases, KHÔNG inject Repository.
+│   └── Trách nhiệm: Giao diện người dùng Blazor Server, Cookie Authentication State,
+│       Minimal API endpoints, xuất file báo cáo Excel (ClosedXML) và PDF (QuestPDF).
+│       Đóng vai trò Composition Root: cấu hình Dependency Injection toàn bộ ứng dụng.
+│       Mọi trang Razor (.razor) CHỈ inject UseCases hoặc Abstractions, KHÔNG inject Repository.
 │
-└── ⚪ SalesAR.UnitTests/          [TẦNG KIỂM THỬ: XUNIT AUTOMATED TESTING]
-    └── Trách nhiệm: Kiểm thử độc lập từng luật nghiệp vụ (Credit Limit, FIFO, Password Hasher, QuestPDF).
+└── ⚪ SalesAR.UnitTests/          [TẦNG KIỂM THỬ: XUNIT AUTOMATED TESTING & DB INTEGRATION]
+    └── Trách nhiệm: 102 bài test tự động bao phủ 15 kịch bản nghiệp vụ bắt buộc,
+        kiểm thử tích hợp giao dịch ACID và Concurrency locking trực tiếp trên SQL Server.
 ```
 
 ---
 
-## 2. MA TRẬN PHỤ THUỘC (DEPENDENCY MATRIX) & XÁC THỰC
+## 2. MA TRẬN PHỤ THUỘC (DEPENDENCY MATRIX) & TUÂN THỦ NGUYÊN TẮC KIẾN TRÚC
 
 ### 2.1. Bảng đối chiếu quy tắc phụ thuộc giữa các file `.csproj`
 
@@ -50,139 +60,111 @@ Solution: SalesAR.sln
 | **`SalesAR.UseCases`** | `SalesAR.UseCases.csproj` | `..\SalesAR.CoreBusiness\` | **Không** | **Đạt tuyệt đối** (Chỉ phụ thuộc Domain) |
 | **`SalesAR.Plugins`** | `SalesAR.Plugins.csproj` | `..\..\SalesAR.CoreBusiness\`<br>`..\..\SalesAR.UseCases\` | **Không** | **Đạt tuyệt đối** (Adapter hướng vào trong) |
 | **`SalesAR.Web`** | `SalesAR.Web.csproj` | `..\SalesAR.CoreBusiness\`<br>`..\SalesAR.UseCases\`<br>`..\Plugins\SalesAR.Plugins\` | **Không** | **Đạt tuyệt đối** (Composition Root) |
-| **`SalesAR.UnitTests`** | `SalesAR.UnitTests.csproj` | `..\SalesAR.CoreBusiness\`<br>`..\SalesAR.UseCases\`<br>`..\SalesAR.Web\` | **Không** | **Đạt** (Kiểm thử UseCase & Services) |
+| **`SalesAR.UnitTests`** | `SalesAR.UnitTests.csproj` | `..\SalesAR.CoreBusiness\`<br>`..\SalesAR.UseCases\`<br>`..\Plugins\SalesAR.Plugins\`<br>`..\SalesAR.Web\` | **Không** | **Đạt tuyệt đối** (Test Runner đa tầng) |
 
 ### 2.2. Biểu đồ luồng phụ thuộc (Dependency Graph)
 
 ```mermaid
-classDiagram
-    direction TB
-    class SalesAR_Web {
-        <<Presentation / Host>>
-        Composition Root (Program.cs)
-        Components/Pages/
-        Components/Common/
-    }
-    class SalesAR_UseCases {
-        <<Application Layer>>
-        Invoices, Payments, Customers
-        AgingReport, Auth, AI
-        PluginInterfaces/
-    }
-    class SalesAR_Plugins {
-        <<Infrastructure Layer>>
-        SqlConnectionFactory
-        Repositories (Dapper + SQL)
-    }
-    class SalesAR_CoreBusiness {
-        <<Domain Layer>>
-        Entities (Customer, Invoice, etc.)
-        Security (IPasswordHasher)
-    }
-
-    SalesAR_Web ..> SalesAR_UseCases : calls UseCases via DI
-    SalesAR_Web ..> SalesAR_Plugins : registers in DI
-    SalesAR_Web ..> SalesAR_CoreBusiness : uses Models
-    SalesAR_Plugins ..|> SalesAR_UseCases : implements PluginInterfaces
-    SalesAR_Plugins ..> SalesAR_CoreBusiness : maps Entities
-    SalesAR_UseCases ..> SalesAR_CoreBusiness : encapsulates Entities
+graph TD
+    UI[SalesAR.Web<br>Blazor Server UI & Composition Root] --> UseCases[SalesAR.UseCases<br>Business Rules & Repositories Interfaces]
+    UI --> Domain[SalesAR.CoreBusiness<br>Entities, Value Objects & PasswordHasher]
+    UI --> Plugins[Plugins/SalesAR.Plugins<br>Dapper SQL Server, Background Worker & AI Adapters]
+    
+    Plugins --> UseCases
+    Plugins --> Domain
+    
+    UseCases --> Domain
+    
+    Tests[SalesAR.UnitTests<br>102 Unit & Integration Tests] -.-> UI
+    Tests -.-> UseCases
+    Tests -.-> Domain
+    Tests -.-> Plugins
 ```
 
 ---
 
-## 3. DANH BẠ DEPENDENCY INJECTION (DI CONTAINER REGISTRATION)
+## 3. DANH MỤC USECASES & REPOSITORY INTERFACES
 
-Được cấu hình tập trung tại Composition Root (`SalesAR.Web/Program.cs`):
+### 3.1. Danh mục UseCases (Tầng Application)
 
-### 3.1. Phân loại Lifetime chuẩn mực
+| Nhóm Nghiệp Vụ | UseCase Class | Trách nhiệm chính |
+| :--- | :--- | :--- |
+| **Bán hàng & Hóa đơn** | `CreateInvoiceUseCase` | Kiểm tra hạn mức khả dụng, sinh mã hóa đơn, ghi nhận nợ |
+| | `ViewInvoiceDetailsUseCase` | Đọc chi tiết hóa đơn, các dòng sản phẩm và lịch sử phân bổ |
+| **Thanh toán & Cấn trừ** | `AllocatePaymentUseCase` | Thuật toán phân bổ thanh toán tự động theo thứ tự FIFO |
+| | `RecordPaymentUseCase` | Ghi nhận phiếu thu và kích hoạt phân bổ nợ trong Transaction |
+| | `ReallocatePaymentUseCase` | Điều chỉnh lại phân bổ thanh toán khi có thay đổi nghiệp vụ |
+| **Tuổi nợ & Báo cáo** | `GenerateAgingReportUseCase` | Phân tổ công nợ theo 4 nhóm ngày (0-30, 31-60, 61-90, >90) |
+| | `ExportAgingReportUseCase` | Xuất bảng kê tuổi nợ ra file Excel (.xlsx) và PDF (.pdf) |
+| **Phê duyệt hạn mức** | `CreateCreditLimitRequestUseCase` | Nhân viên kinh doanh nộp đơn xin duyệt vượt hạn mức |
+| | `ApproveCreditLimitRequestUseCase` | Quản lý tín dụng duyệt đơn (Kiểm tra SoD, khóa bi quan) |
+| | `RejectCreditLimitRequestUseCase` | Từ chối yêu cầu vượt hạn mức kèm lý do |
+| | `CancelCreditLimitRequestUseCase` | Hủy yêu cầu khi đơn hàng bị hủy |
+| **Tự động nhắc nợ** | `EvaluateReminderRuleUseCase` | Đánh giá điều kiện đến hạn và quá hạn của hóa đơn |
+| | `ProcessPendingRemindersUseCase` | Background Worker gửi email nhắc nợ, xử lý Cooldown & Retry |
+| **Dashboard & Dự báo** | `GetArDashboardKpiUseCase` | Tính toán 10 chỉ số KPI tài chính trọng yếu và DSO |
+| | `GetCashCollectionForecastUseCase`| Mô hình dự báo dòng tiền vào theo xác suất lịch sử |
+| **Trợ lý AI** | `SummarizeCustomerArUseCase` | Tổng hợp tình hình công nợ, phân tách GroundTruth & Narrative |
+| | `AssessCustomerCreditRiskUseCase` | Chấm điểm rủi ro tín dụng v1.0 theo Rule-based minh bạch |
+| | `GenerateReminderDraftUseCase` | Soạn thảo bản nháp thư nhắc nợ theo 3 sắc thái cảm xúc |
+| **Bảo mật & Kiểm toán** | `LoginUseCase` | Xác thực đăng nhập bằng PBKDF2/SHA-256 + Salt |
+| | `GetPagedAuditLogsUseCase` | Phân trang, tìm kiếm và so sánh Diff JSON lịch sử kiểm toán |
 
-| Nhóm dịch vụ | Interface | Lớp triển khai (Implementation) | Lifetime | Lý do lựa chọn Lifetime |
+### 3.2. Danh mục Repository Interfaces (Thư mục `SalesAR.UseCases/PluginInterfaces/`)
+
+- `ICustomerRepository`: Quản lý khách hàng, hạn mức tín dụng và số dư nợ hiện tại.
+- `IProductRepository`: Quản lý danh mục hàng hóa, đơn giá và tồn kho.
+- `IInvoiceRepository`: Quản lý hóa đơn, chi tiết dòng hàng và cập nhật trạng thái.
+- `IPaymentRepository`: Quản lý phiếu thu, phân bổ thanh toán và điều chỉnh phân bổ.
+- `IAgingReportRepository`: Truy vấn dữ liệu phân tích tuổi nợ khách hàng.
+- `ICreditLimitRequestRepository`: Quản lý vòng đời đơn duyệt hạn mức tín dụng.
+- `IReminderRepository`: Quản lý luật nhắc nợ, nhật ký gửi, hàng đợi retry và tranh chấp.
+- `IArDashboardRepository`: Truy vấn tổng hợp KPI và xu hướng thu tiền.
+- `IAuditLogRepository`: Truy vấn phân trang nhật ký kiểm toán hệ thống.
+- `ICreditRiskAssessmentRepository`: Lưu trữ lịch sử đánh giá rủi ro tín dụng.
+- `IUserRepository`, `IRoleRepository`: Quản lý tài khoản người dùng và vai trò bảo mật.
+
+---
+
+## 4. QUẢN TRỊ VÒNG ĐỜI DỊCH VỤ (DEPENDENCY INJECTION LIFETIMES)
+
+Được cấu hình chuẩn mực tại `SalesAR.Web/Program.cs`:
+
+| Phân loại | Interface / Service | Triển khai | Lifetime | Lý do lựa chọn |
 | :--- | :--- | :--- | :---: | :--- |
-| **Cơ sở dữ liệu** | `ISqlConnectionFactory` | `SqlConnectionFactory` | `Singleton` | Connection string và Factory là thread-safe, không chứa trạng thái tạm. |
-| **Bảo mật** | `IPasswordHasher` | `PasswordHasher` | `Singleton` | Không có state, mã hóa thuật toán PBKDF2/SHA-256 dùng chung toàn ứng dụng. |
-| **Xác thực** | `AuthenticationStateProvider` | `CustomAuthenticationStateProvider` | `Scoped` | Trạng thái đăng nhập gắn liền theo từng phiên kết nối SignalR của người dùng. |
-| **Hạ tầng Repositories** | `ICustomerRepository` | `CustomerRepository` | `Scoped` | Mở kết nối SQL và giải phóng theo từng yêu cầu / vòng đời Circuit. |
-| | `IProductRepository` | `ProductRepository` | `Scoped` | Tương tự |
-| | `IInvoiceRepository` | `InvoiceRepository` | `Scoped` | Tương tự |
-| | `IPaymentRepository` | `PaymentRepository` | `Scoped` | Tương tự |
-| | `IAgingReportRepository` | `AgingReportRepository` | `Scoped` | Tương tự |
-| | `IUserRepository` | `UserRepository` | `Scoped` | Tương tự |
-| | `IRoleRepository` | `RoleRepository` | `Scoped` | Tương tự |
-| **Khách hàng UseCases** | `IViewCustomersUseCase`<br>`IViewCustomerByIdUseCase`<br>`IAddCustomerUseCase`<br>`IEditCustomerUseCase`<br>`IDeleteCustomerUseCase`<br>`IGetCustomerDebtUseCase` | `ViewCustomersUseCase`<br>`ViewCustomerByIdUseCase`<br>`AddCustomerUseCase`<br>`EditCustomerUseCase`<br>`DeleteCustomerUseCase`<br>`GetCustomerDebtUseCase` | `Scoped` | Vòng đời phụ thuộc các Repository đã inject vào constructor. |
-| **Sản phẩm UseCases** | `IViewProductsUseCase`<br>`IViewProductByIdUseCase`<br>`IAddProductUseCase`<br>`IEditProductUseCase`<br>`IDeleteProductUseCase` | `ViewProductsUseCase`<br>`ViewProductByIdUseCase`<br>`AddProductUseCase`<br>`EditProductUseCase`<br>`DeleteProductUseCase` | `Scoped` | Quản lý danh mục hàng hóa |
-| **Hóa đơn UseCases** | `IViewInvoicesUseCase`<br>`ICreateInvoiceUseCase` | `ViewInvoicesUseCase`<br>`CreateInvoiceUseCase` | `Scoped` | Kiểm soát hạn mức tín dụng và tạo hóa đơn bán hàng |
-| **Thanh toán UseCases** | `IAllocatePaymentUseCase`<br>`IRecordPaymentUseCase`<br>`IProcessPaymentUseCase`<br>`IViewPaymentsUseCase` | `AllocatePaymentUseCase`<br>`RecordPaymentUseCase`<br>`ProcessPaymentUseCase`<br>`ViewPaymentsUseCase` | `Scoped` | Cấn trừ nợ FIFO và lưu trữ giao dịch |
-| **Báo cáo Tuổi nợ** | `IGetAgingReportUseCase`<br>`IViewAgingReportUseCase`<br>`IAgingReportExporter` | `GetAgingReportUseCase`<br>`ViewAgingReportUseCase`<br>`AgingReportExporter` | `Scoped` | Phân tổ kỳ hạn nợ & xuất file Excel / PDF |
-| **Trợ lý AI** | `IDebtReminderAiService` | `DebtReminderAiService` | `Scoped` | Sinh dự thảo nhắc nợ tự động theo từng khách hàng |
-| **Quản trị người dùng** | `ILoginUseCase`<br>`IViewUsersUseCase`<br>`ICreateUserUseCase`<br>`IToggleUserStatusUseCase`<br>`IViewRolesUseCase` | `LoginUseCase`<br>`ViewUsersUseCase`<br>`CreateUserUseCase`<br>`ToggleUserStatusUseCase`<br>`ViewRolesUseCase` | `Scoped` | Phân quyền và tài khoản RBAC |
+| **Cơ sở dữ liệu** | `ISqlConnectionFactory` | `SqlConnectionFactory` | `Singleton` | Connection string và Factory thread-safe, không chứa state tạm. |
+| **Hạ tầng bảo mật** | `IPasswordHasher` | `PasswordHasher` | `Singleton` | Thuật toán băm PBKDF2 là pure logic, phi trạng thái. |
+| **Dịch vụ nền** | `IHostedService` | `BackgroundReminderJobScheduler` | `Singleton` | Chạy nền định kỳ xuyên suốt vòng đời ứng dụng. |
+| **Trợ lý AI** | `IAiProvider` | `GeminiAiProvider` | `Scoped` | Tận dụng HttpClientFactory và Scoped Configuration. |
+| | `LocalHeuristicAiProvider` | `LocalHeuristicAiProvider` | `Singleton` | Rule Engine nội bộ không trạng thái. |
+| **Repositories** | `ICustomerRepository`, `IInvoiceRepository`... | Dapper Repositories | `Scoped` | Gắn liền với vòng đời một phiên kết nối / Circuit của Blazor. |
+| **UseCases** | `CreateInvoiceUseCase`, `RecordPaymentUseCase`... | Concrete UseCases | `Scoped` | Mỗi tương tác người dùng tạo UseCase với các Repository phụ thuộc. |
+| **Xác thực** | `AuthenticationStateProvider` | `CustomAuthenticationStateProvider` | `Scoped` | Lưu giữ danh tính phiên đăng nhập riêng biệt cho từng người dùng. |
 
 ---
 
-## 4. CHUẨN HÓA GIAO TIẾP TẦNG TRÌNH DIỄN (ZERO-REPOSITORY IN RAZOR)
+## 5. THIẾT KẾ BẢO MẬT & PHÂN QUYỀN RBAC (4 ROLES)
 
-### 4.1. Vấn đề kiến trúc được khắc phục trong Part 2
-Trong quá trình Audit (Part 1), phát hiện 4 trang `.razor` từng inject trực tiếp Interface Repository:
-- `CreatePayment.razor`: inject `IInvoiceRepository`
-- `CustomerDetail.razor`: inject `IInvoiceRepository` & `IPaymentRepository`
-- `InvoiceDetail.razor`: inject `IPaymentRepository`
-- `DebtSummary.razor`: inject `IInvoiceRepository`
-- `Payments.razor`: inject `IPaymentRepository` (không dùng)
+Hệ thống triển khai mô hình kiểm soát truy cập phân tầng (Role-Based Access Control) với 4 nhóm vai trò được cấp phát quyền rõ ràng:
 
-### 4.2. Giải pháp tái cấu trúc triệt để
-1. Mở rộng `IViewInvoicesUseCase` và `ViewInvoicesUseCase` với 2 phương thức:
-   - `Task<IEnumerable<Invoice>> GetInvoicesByCustomerAsync(int customerId);`
-   - `Task<IEnumerable<InvoiceOutstandingDto>> GetOutstandingInvoicesByCustomerAsync(int customerId);`
-2. Mở rộng `IViewPaymentsUseCase` và `ViewPaymentsUseCase` với 2 phương thức:
-   - `Task<IEnumerable<Payment>> GetPaymentsByCustomerAsync(int customerId);`
-   - `Task<IEnumerable<PaymentAllocation>> GetAllocationsByCustomerAsync(int customerId);`
-3. Cập nhật toàn bộ các trang `.razor` trên:
-   - Chuyển toàn bộ `@inject I...Repository` sang `@inject IViewInvoicesUseCase` và `@inject IViewPaymentsUseCase`.
-   - Xóa bỏ `@inject IPaymentRepository` thừa tại `Payments.razor`.
-
-👉 **KẾT QUẢ KIỂM CHỨNG**: Tìm kiếm toàn bộ thư mục `SalesAR.Web/Components` xác nhận **0 kết quả chứa từ khóa Repository**. Toàn bộ 100% giao diện Blazor hiện nay giao tiếp độc quyền thông qua UseCases!
-
----
-
-## 5. DỌN DẸP & HỢP NHẤT USECASE THANH TOÁN
-
-- **Vấn đề**: `ProcessPaymentUseCase` cũ chứa đoạn mã gán cứng `alreadyAllocated = 0`, gây nguy cơ phân bổ sai số dư đối với các hóa đơn thanh toán nhiều đợt (`PartiallyPaid`).
-- **Giải pháp**: Tái cấu trúc `ProcessPaymentUseCase` thành dạng **Decorator / Delegation Pattern**, chuyển tiếp toàn bộ cuộc gọi sang `IRecordPaymentUseCase.ExecuteAsync(payment)`.
-- **Lợi ích**: Bảo toàn tương thích hợp đồng `IProcessPaymentUseCase` trong DI, đồng thời loại bỏ triệt để đoạn mã lỗi tiềm ẩn.
-
----
-
-## 6. BẰNG CHỨNG KIỂM TRA THỰC TẾ (VERIFIABLE EVIDENCE)
-
-### 6.1. Kiểm tra Biên dịch Solution (`dotnet build`)
-```text
-Build succeeded.
-    0 Warning(s)
-    0 Error(s)
-Time Elapsed 00:00:18.09
+```mermaid
+graph TD
+    User((Người dùng đăng nhập)) --> Auth{Xác thực Cookie<br>PBKDF2/SHA-256}
+    
+    Auth -->|Role = ADMIN| R1[Toàn quyền Quản trị<br>Người dùng, Cấu hình, Xem Nhật ký Kiểm toán]
+    Auth -->|Role = CREDIT_MANAGER| R2[Quản lý Tín dụng<br>Duyệt đơn vượt hạn mức, Đánh giá rủi ro, Xem Audit Log]
+    Auth -->|Role = ACCOUNTANT| R3[Kế toán Công nợ<br>Phiếu thu, Phân bổ FIFO, Tuổi nợ, Nhắc nợ, Dashboard]
+    Auth -->|Role = SALES| R4[Nhân viên Kinh doanh<br>Khách hàng, Bán hàng, Tạo hóa đơn, Xin duyệt hạn mức]
 ```
 
-### 6.2. Kiểm tra Kiểm thử tự động (`dotnet test`)
-```text
-Passed!  - Failed: 0, Passed: 20, Skipped: 0, Total: 20, Duration: 2 s - SalesAR.UnitTests.dll (net8.0)
-```
-- `CreditLimitTests` (2/2 Passed): Kiểm tra luật chặn xuất nợ vượt hạn mức tín dụng.
-- `FifoPaymentTests` (4/4 Passed): Kiểm tra thuật toán cấn trừ hóa đơn cũ nhất trước, không vượt số dư hóa đơn, không vượt số tiền thu.
-- `InvoiceValidationTests` (2/2 Passed): Kiểm tra ràng buộc phải có dòng chi tiết và số lượng $>0$.
-- `LoginUseCaseTests` (3/3 Passed): Kiểm tra đăng nhập, sai mật khẩu, tài khoản bị vô hiệu hóa.
-- `PasswordHasherTests` (5/5 Passed): Kiểm tra tính ngẫu nhiên của Salt và độ an toàn mật khẩu PBKDF2.
-- `PdfVietnameseFontTests` (2/2 Passed): Kiểm tra xuất PDF tiếng Việt có dấu.
-
----
-
-## 7. KẾT LUẬN & ĐÁNH GIÁ NGHIỆM THU PART 2
-
-| Tiêu chuẩn nghiệm thu Part 2 | Kết quả kiểm chứng | Đánh giá |
-| :--- | :--- | :---: |
-| Build toàn bộ solution không lỗi | 0 Warning, 0 Error trên cả 5 projects | **PASS** |
-| Kiểm tra các ProjectReference | Đúng chuẩn 4 tầng Clean Architecture, không vòng lặp | **PASS** |
-| DI Container được cấu hình chuẩn mực | Đầy đủ Singleton, Scoped hợp lý | **PASS** |
-| Zero-Repository in Razor Components | 100% `.razor` chỉ gọi UseCase, loại bỏ sạch `@inject Repository` | **PASS** |
-| Không phá vỡ chức năng cũ | 20/20 Unit Tests kiểm thử độc lập Passed | **PASS** |
-| Tài liệu kiến trúc hoàn thiện | Khởi tạo đầy đủ `Documentation/ARCHITECTURE.md` | **PASS** |
-
-> **Quyết định**: **PART 2/10 CHÍNH THỨC NGHIỆM THU ĐẠT (PASS)**. Sẵn sàng chuyển tiếp sang **PART 3/10 (Data Access & Concurrency Control)**.
+- **Server-Side Enforcement**: Mọi hành động nhạy cảm đều được bảo vệ tại UseCase. Ví dụ `ApproveCreditLimitRequestUseCase` kiểm tra trực tiếp:
+  ```csharp
+  if (approverRole != "CREDIT_MANAGER" && approverRole != "ADMIN")
+      throw new UnauthorizedAccessException("Chỉ CREDIT_MANAGER hoặc ADMIN mới có quyền duyệt đơn này.");
+  ```
+- **Segregation of Duties (SoD)**: Người yêu cầu đơn tín dụng không thể tự duyệt đơn của chính mình:
+  ```csharp
+  if (string.Equals(request.RequestedBy, approverUsername, StringComparison.OrdinalIgnoreCase))
+      throw new InvalidOperationException("Vi phạm Segregation of Duties: Người tạo đơn không được phép tự phê duyệt.");
+  ```
+- **Cookie Security**: Cookie xác thực được bảo vệ bằng các cờ `HttpOnly = true`, `SameSite = Strict`, `SlidingExpiration = true`, `ExpireTimeSpan = 8 giờ`.
